@@ -7,6 +7,7 @@ import queue
 import threading
 import random
 import re
+import requests
 from datetime import datetime
 from botocore.exceptions import ClientError
 from botocore.client import Config
@@ -23,28 +24,22 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-    /* === BACKGROUND BLUE GRADIENT === */
     .stApp {
         background: radial-gradient(ellipse at top, #1E3A8A 0%, #0F172A 45%, #020617 100%);
     }
-    
-    /* Hide default UI */
     [data-testid="collapsedControl"] {display: none;}
     [data-testid="stSidebar"] {display: none;}
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
-    
     .block-container { padding-bottom: 130px !important; padding-top: 2rem !important; }
-    
-    /* === TEXT & HEADERS === */
+
     h1, h2, h3, h4, h5, h6 { color: #E0F2FE !important; }
     .stMarkdown p, label { color: #CBD5E1; }
-    
-    /* === NAVIGATION BAR (BIRU GELAP GLOW) === */
+
+    /* === NAV BOTTOM === */
     div[data-testid="stRadio"] {
-        position: fixed;
-        bottom: 0; left: 0; right: 0;
+        position: fixed; bottom: 0; left: 0; right: 0;
         background: linear-gradient(180deg, #0B132B 0%, #020617 100%);
         padding: 12px 5px 16px 5px;
         z-index: 9999;
@@ -52,23 +47,14 @@ st.markdown("""
         box-shadow: 0 -8px 25px rgba(30, 64, 175, 0.35);
     }
     div[data-testid="stRadio"] > div {
-        display: flex;
-        flex-direction: row !important;
-        justify-content: space-around;
-        width: 100%;
-        gap: 4px;
+        display: flex; flex-direction: row !important;
+        justify-content: space-around; width: 100%; gap: 4px;
     }
     div[data-testid="stRadio"] label {
-        flex: 1;
-        text-align: center;
-        margin: 0 !important;
-        padding: 8px 4px 6px 4px !important;
-        cursor: pointer;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        position: relative;
-        border-radius: 12px;
+        flex: 1; text-align: center; margin: 0 !important;
+        padding: 8px 4px 6px 4px !important; cursor: pointer;
+        display: flex; flex-direction: column; align-items: center;
+        position: relative; border-radius: 12px;
         transition: background 0.25s ease, transform 0.2s ease;
     }
     div[data-testid="stRadio"] label:hover {
@@ -76,74 +62,51 @@ st.markdown("""
         transform: translateY(-1px);
     }
     div[data-testid="stRadio"] label::before {
-        content: '';
-        position: absolute;
-        top: -1px;
-        left: 50%;
-        transform: translateX(-50%);
-        width: 0;
-        height: 3px;
+        content: ''; position: absolute; top: -1px; left: 50%;
+        transform: translateX(-50%); width: 0; height: 3px;
         background: linear-gradient(90deg, #3B82F6, #38BDF8);
         border-radius: 3px;
         transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         box-shadow: 0 0 10px #38BDF8;
     }
-    div[data-testid="stRadio"] label:has(input:checked)::before {
-        width: 45%;
-    }
-    div[data-testid="stRadio"] label > div:first-child {
-        display: none !important;
-    }
+    div[data-testid="stRadio"] label:has(input:checked)::before { width: 45%; }
+    div[data-testid="stRadio"] label > div:first-child { display: none !important; }
     div[data-testid="stRadio"] label p {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 4px;
-        font-size: 10px !important;
-        color: #64748B !important;
-        margin: 0 !important;
-        font-weight: 600 !important;
-        transition: color 0.25s ease;
-        line-height: 1.2;
+        display: flex; flex-direction: column; align-items: center;
+        justify-content: center; gap: 4px;
+        font-size: 10px !important; color: #64748B !important;
+        margin: 0 !important; font-weight: 600 !important;
+        transition: color 0.25s ease; line-height: 1.2;
     }
     div[data-testid="stRadio"] label img {
-        width: 24px;
-        height: 24px;
-        margin: 0 !important;
-        opacity: 0.6;
-        transition: all 0.25s ease;
+        width: 24px; height: 24px; margin: 0 !important;
+        opacity: 0.6; transition: all 0.25s ease;
     }
-    div[data-testid="stRadio"] label:has(input:checked) p {
-        color: #38BDF8 !important;
-    }
+    div[data-testid="stRadio"] label:has(input:checked) p { color: #38BDF8 !important; }
     div[data-testid="stRadio"] label:has(input:checked) img {
         opacity: 1;
         filter: invert(63%) sepia(54%) saturate(3282%) hue-rotate(177deg) brightness(99%) contrast(95%);
         transform: scale(1.12);
     }
-    
-    /* === BUTTONS (BLUE GRADIENT) === */
+
+    /* === BUTTONS === */
     .stButton > button {
         background: linear-gradient(135deg, #1E40AF 0%, #3B82F6 100%);
-        border: 1px solid #2563EB;
-        color: white !important;
-        border-radius: 12px;
-        font-weight: 600;
+        border: 1px solid #2563EB; color: white !important;
+        border-radius: 12px; font-weight: 600;
         transition: all 0.2s ease;
         box-shadow: 0 2px 10px rgba(59, 130, 246, 0.3);
     }
     .stButton > button:hover {
         background: linear-gradient(135deg, #2563EB 0%, #60A5FA 100%);
         box-shadow: 0 6px 18px rgba(59, 130, 246, 0.5);
-        transform: translateY(-2px);
-        border-color: #60A5FA;
+        transform: translateY(-2px); border-color: #60A5FA;
     }
     .stButton > button[kind="primary"] {
         background: linear-gradient(135deg, #0EA5E9 0%, #38BDF8 100%);
         box-shadow: 0 4px 16px rgba(56, 189, 248, 0.45);
     }
-    
+
     /* === INPUTS === */
     .stTextInput input, .stTextArea textarea {
         background: #0F172A !important;
@@ -155,130 +118,88 @@ st.markdown("""
         border-color: #3B82F6 !important;
         box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3) !important;
     }
-    
+
     /* === TABS === */
     .stTabs [data-baseweb="tab-list"] {
-        background: #0F172A;
-        border-radius: 12px;
-        padding: 4px;
-        gap: 4px;
-        border: 1px solid #1E3A8A;
+        background: #0F172A; border-radius: 12px;
+        padding: 4px; gap: 4px; border: 1px solid #1E3A8A;
     }
     .stTabs [data-baseweb="tab"] {
-        color: #64748B;
-        border-radius: 8px;
-        font-weight: 600;
+        color: #64748B; border-radius: 8px; font-weight: 600;
     }
     .stTabs [aria-selected="true"] {
         background: linear-gradient(135deg, #1E40AF, #3B82F6) !important;
         color: white !important;
     }
-    
+
     /* === PROFILE CARD === */
     .profile-card {
         background: linear-gradient(135deg, #1E3A8A 0%, #3B82F6 100%);
-        border-radius: 20px;
-        padding: 20px;
-        color: white;
-        display: flex;
-        align-items: center;
-        margin-bottom: 20px;
+        border-radius: 20px; padding: 20px; color: white;
+        display: flex; align-items: center; margin-bottom: 20px;
         box-shadow: 0 10px 28px rgba(59, 130, 246, 0.4);
         border: 1px solid rgba(96, 165, 250, 0.35);
     }
     .profile-avatar {
-        width: 64px; height: 64px;
-        border-radius: 50%;
+        width: 64px; height: 64px; border-radius: 50%;
         background: rgba(255,255,255,0.15);
         display: flex; justify-content: center; align-items: center;
-        margin-right: 15px;
-        border: 2px solid rgba(255,255,255,0.35);
+        margin-right: 15px; border: 2px solid rgba(255,255,255,0.35);
         box-shadow: 0 0 15px rgba(96, 165, 250, 0.5);
     }
     .profile-info h3 { margin: 0; font-size: 20px; font-weight: 700; color: white !important; }
     .profile-info p { margin: 5px 0 0 0; font-size: 13px; color: rgba(255,255,255,0.85) !important; }
-    
-    /* === WALLET CARD (BALANCE) === */
+
+    /* === WALLET CARD === */
     .wallet-card {
         background: linear-gradient(135deg, #1E40AF 0%, #3B82F6 45%, #0EA5E9 100%);
-        border-radius: 24px;
-        padding: 22px 24px;
-        color: white;
+        border-radius: 24px; padding: 22px 24px; color: white;
         margin-bottom: 20px;
         box-shadow: 0 12px 32px rgba(59, 130, 246, 0.45), inset 0 1px 0 rgba(255,255,255,0.25);
-        position: relative;
-        overflow: hidden;
+        position: relative; overflow: hidden;
         border: 1px solid rgba(96, 165, 250, 0.4);
     }
     .wallet-card::before {
-        content: '';
-        position: absolute;
-        top: -60%; right: -20%;
+        content: ''; position: absolute; top: -60%; right: -20%;
         width: 200%; height: 200%;
         background: radial-gradient(circle, rgba(255,255,255,0.18) 0%, transparent 55%);
         pointer-events: none;
     }
     .wallet-card::after {
-        content: '';
-        position: absolute;
-        bottom: -40%; left: -20%;
+        content: ''; position: absolute; bottom: -40%; left: -20%;
         width: 150%; height: 150%;
         background: radial-gradient(circle, rgba(14, 165, 233, 0.3) 0%, transparent 60%);
         pointer-events: none;
     }
     .wallet-header {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        font-size: 13px;
-        opacity: 0.95;
-        font-weight: 500;
-        margin-bottom: 4px;
-        position: relative;
-        z-index: 1;
+        display: flex; align-items: center; gap: 8px;
+        font-size: 13px; opacity: 0.95; font-weight: 500;
+        margin-bottom: 4px; position: relative; z-index: 1;
     }
     .wallet-balance {
-        font-size: 34px;
-        font-weight: 800;
-        letter-spacing: -0.5px;
-        margin: 10px 0 6px 0;
-        text-shadow: 0 3px 10px rgba(0,0,0,0.25);
-        position: relative;
-        z-index: 1;
+        font-size: 34px; font-weight: 800; letter-spacing: -0.5px;
+        margin: 10px 0 6px 0; text-shadow: 0 3px 10px rgba(0,0,0,0.25);
+        position: relative; z-index: 1;
     }
     .wallet-footer {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        font-size: 12px;
-        opacity: 0.92;
-        margin-top: 14px;
-        padding-top: 12px;
-        border-top: 1px solid rgba(255,255,255,0.28);
-        position: relative;
-        z-index: 1;
+        display: flex; justify-content: space-between; align-items: center;
+        font-size: 12px; opacity: 0.92; margin-top: 14px;
+        padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.28);
+        position: relative; z-index: 1;
     }
     .wallet-badge {
-        background: rgba(255,255,255,0.22);
-        padding: 3px 10px;
-        border-radius: 20px;
-        font-size: 11px;
-        font-weight: 600;
+        background: rgba(255,255,255,0.22); padding: 3px 10px;
+        border-radius: 20px; font-size: 11px; font-weight: 600;
         backdrop-filter: blur(6px);
     }
-    
+
     /* === LIST ITEM === */
     .list-item {
         background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%);
-        padding: 14px 16px;
-        border-radius: 14px;
-        margin-bottom: 10px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
+        padding: 14px 16px; border-radius: 14px; margin-bottom: 10px;
+        display: flex; align-items: center; justify-content: space-between;
         box-shadow: 0 2px 10px rgba(0,0,0,0.35);
-        font-weight: 500;
-        color: #F8FAFC;
+        font-weight: 500; color: #F8FAFC;
         border: 1px solid #1E3A8A;
         transition: all 0.25s ease;
     }
@@ -288,33 +209,55 @@ st.markdown("""
         transform: translateY(-1px);
     }
     .list-item-left { display: flex; align-items: center; gap: 12px; }
-    
-    /* === BADGE === */
-    .notif-badge {
-        background: linear-gradient(135deg, #EF4444, #DC2626);
-        color: white;
-        font-size: 10px;
-        padding: 2px 8px;
-        border-radius: 10px;
-        font-weight: 700;
-        margin-left: 8px;
-        box-shadow: 0 2px 8px rgba(239, 68, 68, 0.5);
-        animation: pulse-badge 1.5s ease-in-out infinite;
-    }
-    @keyframes pulse-badge {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.6; }
-    }
 </style>
 """, unsafe_allow_html=True)
 
 
 # ==========================================
-# 1. S3 WORKER + QUEUE (ASYNC SAVES)
+# SVG INLINE HELPER
+# ==========================================
+_SVG_PATHS = {
+    "check":      '<polyline points="20 6 9 17 4 12"/>',
+    "x":          '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
+    "trash":      '<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
+    "download":   '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>',
+    "video":      '<polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>',
+    "clock":      '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+    "calendar":   '<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
+    "folder":     '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>',
+    "pending":    '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>',
+    "link":       '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+    "package":    '<line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>',
+    "user":       '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+    "bell":       '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
+    "send":       '<line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>',
+    "alert":      '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
+    "info":       '<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>',
+}
+
+def svg(name, size=16, color="#38BDF8"):
+    """Render inline SVG icon."""
+    path = _SVG_PATHS.get(name, "")
+    return (
+        f'<svg width="{size}" height="{size}" viewBox="0 0 24 24" fill="none" '
+        f'stroke="{color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" '
+        f'style="display:inline-block;vertical-align:middle;">{path}</svg>'
+    )
+
+def svg_html(name, text, size=16, color="#38BDF8"):
+    """SVG + label sebagai satu string HTML."""
+    return f"{svg(name, size, color)} <span style='vertical-align:middle;'>{text}</span>"
+
+
+# ==========================================
+# 1. S3 WORKER + QUEUE
 # ==========================================
 @st.cache_resource
 def get_worker():
     class S3Worker:
+        CATBOX_API = "https://catbox.moe/user/api.php"
+        CATBOX_USERHASH = st.secrets.get("CATBOX_USERHASH", "")
+
         def __init__(self):
             raw_bucket = st.secrets.get("S3_BUCKET_NAME", "SatyaDev13/ElangP")
             if "/" in raw_bucket:
@@ -332,8 +275,7 @@ def get_worker():
                 endpoint_url = raw_endpoint
 
             self.s3 = boto3.client(
-                "s3",
-                endpoint_url=endpoint_url,
+                "s3", endpoint_url=endpoint_url,
                 aws_access_key_id=st.secrets["S3_ACCESS_KEY_ID"],
                 aws_secret_access_key=st.secrets["S3_SECRET_ACCESS_KEY"],
                 config=Config(s3={"addressing_style": "path"}, signature_version="s3v4")
@@ -356,7 +298,8 @@ def get_worker():
                 self.data["users"].append({
                     "uid": admin_uid, "pass_hash": self.hash_pwd(admin_pwd),
                     "name": "Administrator", "role": "admin",
-                    "banned": False, "accounts": [], "telegram": ""
+                    "banned": False, "accounts": [], "telegram": "",
+                    "notifications": []
                 })
                 self._save("users.json", self.data["users"])
             else:
@@ -417,13 +360,11 @@ def get_worker():
                     self.q.task_done()
 
         def execute(self, func, *args, **kwargs):
-            """Sinkron — tunggu hasil (dipakai hanya kalau perlu)."""
             res_q = queue.Queue()
             self.q.put((func, args, kwargs, res_q))
             return res_q.get()
 
         def execute_async(self, func, *args, **kwargs):
-            """Async — fire & forget, UI tetap smooth tanpa lag."""
             self.q.put((func, args, kwargs, None))
 
         def save_file(self, key, data):
@@ -434,6 +375,38 @@ def get_worker():
         def upload_file_s3(self, file_bytes, filename):
             self.s3.put_object(Bucket=self.bucket, Key=f"uploads/{filename}", Body=file_bytes)
             return True
+
+        # ===== CATBOX.MOE =====
+        def upload_video_catbox(self, file_bytes, filename):
+            try:
+                r = requests.post(
+                    self.CATBOX_API,
+                    data={"reqtype": "fileupload", "userhash": self.CATBOX_USERHASH},
+                    files={"fileToUpload": (filename, file_bytes)},
+                    timeout=180
+                )
+                txt = r.text.strip()
+                if r.status_code == 200 and txt.startswith("http"):
+                    return txt
+                return f"ERROR: {txt[:300]}"
+            except Exception as e:
+                return f"ERROR: {e}"
+
+        def delete_video_catbox(self, url):
+            try:
+                filename = url.rstrip("/").split("/")[-1]
+                r = requests.post(
+                    self.CATBOX_API,
+                    data={
+                        "reqtype": "deletefiles",
+                        "userhash": self.CATBOX_USERHASH,
+                        "files": filename
+                    },
+                    timeout=30
+                )
+                return r.text.strip()
+            except Exception as e:
+                return f"ERROR: {e}"
 
     return S3Worker()
 
@@ -474,7 +447,12 @@ def save_key(key):
 # 3. AUTENTIKASI
 # ==========================================
 def login_page():
-    st.markdown("<div style='text-align: center; margin-bottom: 10px; filter: drop-shadow(0 0 20px rgba(59, 130, 246, 0.6));'><img src='https://cdn.aceimg.com/mD4NlOxLG.png' width='100'></div>", unsafe_allow_html=True)
+    st.markdown(
+        "<div style='text-align: center; margin-bottom: 10px; "
+        "filter: drop-shadow(0 0 20px rgba(59, 130, 246, 0.6));'>"
+        "<img src='https://cdn.aceimg.com/mD4NlOxLG.png' width='100'></div>",
+        unsafe_allow_html=True
+    )
     st.markdown("<h2 style='text-align: center; color: #38BDF8;'>ElangPintar</h2>", unsafe_allow_html=True)
     st.write("")
     with st.form("login_form"):
@@ -499,11 +477,16 @@ if "user" not in st.session_state:
 user = next((u for u in worker.data["users"] if u["uid"] == st.session_state.user["uid"]), st.session_state.user)
 st.session_state.user = user
 
-st.markdown("<div style='text-align: center; margin-bottom: 20px; filter: drop-shadow(0 0 15px rgba(59, 130, 246, 0.6));'><img src='https://cdn.aceimg.com/mD4NlOxLG.png' width='70'></div>", unsafe_allow_html=True)
+st.markdown(
+    "<div style='text-align: center; margin-bottom: 20px; "
+    "filter: drop-shadow(0 0 15px rgba(59, 130, 246, 0.6));'>"
+    "<img src='https://cdn.aceimg.com/mD4NlOxLG.png' width='70'></div>",
+    unsafe_allow_html=True
+)
 
 
 # ==========================================
-# 4. ROUTING NAVIGASI BAWAH
+# 4. ROUTING NAV BAWAH
 # ==========================================
 def nav_icon(name, label):
     url = f"https://api.iconify.design/ph/{name}.svg?color=%238A99AD"
@@ -515,24 +498,24 @@ if user["role"] == "admin":
         "Nav", menu_options, horizontal=True, label_visibility="collapsed",
         format_func=lambda x: {
             "Employee": nav_icon("users-three", "Karyawan"),
-            "Payroll": nav_icon("wallet", "Gaji"),
+            "Payroll":  nav_icon("wallet", "Gaji"),
             "Analytic": nav_icon("chart-line-up", "Analitik"),
-            "Report": nav_icon("file-text", "Laporan"),
-            "Akun": nav_icon("user", "Akun")
+            "Report":   nav_icon("file-text", "Laporan"),
+            "Akun":     nav_icon("user", "Akun")
         }[x]
     )
 else:
     unread_count = sum(1 for n in user.get("notifications", []) if not n.get("read", False))
-    data_label = f"Data{' ●' if unread_count else ''}"
+    data_label = f"Data ({unread_count})" if unread_count else "Data"
     menu_options = ["Data", "Pengajuan", "Upload", "Teks", "Akun"]
     page = st.radio(
         "Nav", menu_options, horizontal=True, label_visibility="collapsed",
         format_func=lambda x: {
-            "Data": nav_icon("database", data_label),
+            "Data":      nav_icon("database", data_label),
             "Pengajuan": nav_icon("file-plus", "NDP"),
-            "Upload": nav_icon("upload-simple", "Upload"),
-            "Teks": nav_icon("text-align-left", "Teks"),
-            "Akun": nav_icon("user", "Akun")
+            "Upload":    nav_icon("upload-simple", "Upload"),
+            "Teks":      nav_icon("text-align-left", "Teks"),
+            "Akun":      nav_icon("user", "Akun")
         }[x]
     )
 
@@ -541,15 +524,9 @@ else:
 # 5. HALAMAN AKUN
 # ==========================================
 if page == "Akun":
-    # Profile Card
     st.markdown(f"""
     <div class="profile-card">
-        <div class="profile-avatar">
-            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                <circle cx="12" cy="7" r="4"></circle>
-            </svg>
-        </div>
+        <div class="profile-avatar">{svg('user', 36, 'white')}</div>
         <div class="profile-info">
             <h3>{user['name']}</h3>
             <p>UID: {user['uid']}</p>
@@ -557,7 +534,6 @@ if page == "Akun":
     </div>
     """, unsafe_allow_html=True)
 
-    # Wallet Card
     my_payroll = worker.data["payroll"].get(user["name"], 0)
     pending_wd = sum(
         r["amount"] for r in worker.data["reports"]["wd"]
@@ -567,18 +543,11 @@ if page == "Akun":
 
     st.markdown(f"""
     <div class="wallet-card">
-        <div class="wallet-header">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="2" y="6" width="20" height="12" rx="2"></rect>
-                <path d="M2 10h20"></path>
-                <circle cx="16" cy="14" r="1.5" fill="currentColor"></circle>
-            </svg>
-            <span>Dompet Elang</span>
-        </div>
+        <div class="wallet-header">{svg('package', 18)}<span>Dompet Kucing</span></div>
         <div class="wallet-balance">{fmt_rp(my_payroll)}</div>
         <div class="wallet-footer">
             <span>Tersedia: <b>{fmt_rp(available)}</b></span>
-            <span class="wallet-badge">● Aktif</span>
+            <span class="wallet-badge">Aktif</span>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -586,57 +555,33 @@ if page == "Akun":
     if st.button("Withdraw", use_container_width=True, type="primary", icon=":material/account_balance_wallet:"):
         st.session_state.show_withdraw = not st.session_state.get("show_withdraw", False)
 
-    # Telegram value
     tg_raw = user.get("telegram", "").strip().lstrip("@")
-    tg_display = f"@{tg_raw}" if tg_raw else "Belum diatur ⚠️"
+    tg_display = f"@{tg_raw}" if tg_raw else "Belum diatur"
     tg_color = "#22C55E" if tg_raw else "#F59E0B"
 
     st.markdown(f"""
     <div class="list-item">
-        <div class="list-item-left">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#38BDF8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
-            <span>Telepon</span>
-        </div>
-        <span style="color: #64748B;">Belum ada</span>
+        <div class="list-item-left">{svg('bell', 20)}<span>Notifikasi</span></div>
+        <span style="color: #64748B;">&gt;</span>
     </div>
     <div class="list-item">
-        <div class="list-item-left">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#38BDF8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-            <span>Riwayat panggilan</span>
-        </div>
-        <span style="color: #64748B;">></span>
-    </div>
-    <div class="list-item">
-        <div class="list-item-left">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#38BDF8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
-            <span>Notifikasi</span>
-        </div>
-        <span style="color: #64748B;">></span>
-    </div>
-    <div class="list-item">
-        <div class="list-item-left">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22C55E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
-            <span>WhatsApp</span>
-        </div>
-        <span style="color: #F59E0B;">Belum ada ⚠️</span>
-    </div>
-    <div class="list-item">
-        <div class="list-item-left">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3B82F6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
-            <span>Telegram</span>
-        </div>
-        <span style="color: {tg_color};">{tg_display} ></span>
+        <div class="list-item-left">{svg('link', 20, '#3B82F6')}<span>Telegram</span></div>
+        <span style="color: {tg_color};">{tg_display} &gt;</span>
     </div>
     """, unsafe_allow_html=True)
 
     st.write("")
 
     # === PENGATURAN AKUN ===
-    with st.expander("⚙️ Pengaturan Akun", expanded=False):
+    with st.expander("Pengaturan Akun", expanded=False):
         with st.form("settings_form"):
             st.write("**Ubah Username & Telegram**")
             new_name = st.text_input("Username Akun", value=user.get("name", ""), max_chars=50)
-            new_telegram = st.text_input("Username Telegram", value=user.get("telegram", "").lstrip("@"), placeholder="username_tanpa_@")
+            new_telegram = st.text_input(
+                "Username Telegram",
+                value=user.get("telegram", "").lstrip("@"),
+                placeholder="username_tanpa_@"
+            )
             if st.form_submit_button("Simpan Perubahan", use_container_width=True, icon=":material/save:"):
                 new_name_clean = new_name.strip()
                 new_tg_clean = new_telegram.strip().lstrip("@")
@@ -655,18 +600,15 @@ if page == "Akun":
                             if d["name"] == old_name: d["name"] = new_name_clean
                         if old_name in worker.data["payroll"]:
                             worker.data["payroll"][new_name_clean] = worker.data["payroll"].pop(old_name)
-                        for r in worker.data["reports"]["ndp"]:
-                            if r["user"] == old_name: r["user"] = new_name_clean
-                        for r in worker.data["reports"]["wd"]:
-                            if r["user"] == old_name: r["user"] = new_name_clean
-                        for r in worker.data["reports"]["video"]:
-                            if r["user"] == old_name: r["user"] = new_name_clean
+                        for k in ["ndp", "wd", "video"]:
+                            for r in worker.data["reports"][k]:
+                                if r["user"] == old_name: r["user"] = new_name_clean
                         save_key("databases.json")
                         save_key("payroll.json")
                         save_key("reports.json")
 
                     save_users()
-                    st.toast("✅ Profil berhasil diperbarui!")
+                    st.toast("Profil berhasil diperbarui!")
                     st.rerun()
 
     if st.button("Keluar / Logout", use_container_width=True, icon=":material/logout:"):
@@ -749,11 +691,12 @@ elif user["role"] == "admin":
                     st.code(f"UID      : {new_uid}\nPassword : {new_pwd}")
 
         with tab2:
-            st.caption("🔐 Kelola, ban, atau hapus akun karyawan.")
+            st.caption("Kelola, ban, atau hapus akun karyawan.")
             for u in list(worker.data["users"]):
                 if u["role"] == "karyawan":
-                    with st.expander(f"{'🔴' if u['banned'] else '🟢'} **{u['name']}** · `{u['uid']}`"):
-                        st.write(f"Status: {'BANNED' if u['banned'] else 'AKTIF'}")
+                    status_txt = "BANNED" if u["banned"] else "AKTIF"
+                    with st.expander(f"{u['name']} — {u['uid']} [{status_txt}]"):
+                        st.write(f"Status: **{status_txt}** | Telegram: `@{u.get('telegram','-') or '-'}`")
                         c1, c2 = st.columns(2)
                         if c1.button("Unban" if u["banned"] else "Ban", key=f"ban_{u['uid']}", use_container_width=True):
                             u["banned"] = not u["banned"]
@@ -763,7 +706,7 @@ elif user["role"] == "admin":
                             st.session_state.confirm_delete = u["uid"]
 
                         if st.session_state.get("confirm_delete") == u["uid"]:
-                            st.error(f"⚠️ Hapus permanen **{u['name']}** beserta semua datanya?")
+                            st.error(f"Hapus permanen **{u['name']}** beserta semua datanya?")
                             cc1, cc2 = st.columns(2)
                             if cc1.button("Ya, Hapus", key=f"yes_{u['uid']}", type="primary", use_container_width=True):
                                 worker.data["users"] = [x for x in worker.data["users"] if x["uid"] != u["uid"]]
@@ -786,7 +729,7 @@ elif user["role"] == "admin":
         with tab3:
             karyawan_list = [u["name"] for u in worker.data["users"] if u["role"] == "karyawan"]
             if karyawan_list:
-                st.info("🔒 **Pengiriman Privat** — Database hanya bisa dilihat oleh karyawan yang dipilih.")
+                st.info("Database dikirim secara privat — hanya karyawan terpilih yang bisa melihat.")
                 target = st.selectbox("Pilih Karyawan", karyawan_list)
                 db_input = st.text_area("Input Database (pisahkan dengan koma/enter)")
                 if st.button("Kirim DB Privat", icon=":material/send:") and db_input:
@@ -800,13 +743,13 @@ elif user["role"] == "admin":
                     if target_u:
                         target_u.setdefault("notifications", []).append({
                             "type": "db",
-                            "message": f"📥 Anda menerima {len(nums)} database baru dari admin",
+                            "message": f"Anda menerima {len(nums)} database baru dari admin",
                             "read": False,
                             "time": str(datetime.now())
                         })
                         save_users()
                     save_key("databases.json")
-                    st.success(f"✅ {len(nums)} DB dikirim **secara privat** ke {target}.")
+                    st.success(f"{len(nums)} DB dikirim privat ke {target}.")
             else:
                 st.info("Belum ada karyawan.")
 
@@ -845,7 +788,8 @@ elif user["role"] == "admin":
             st.info("Belum ada karyawan.")
         else:
             selected = st.selectbox("Pilih Karyawan", employees)
-            ndp_approved = [r for r in worker.data["reports"]["ndp"] if r["user"] == selected and r.get("status") == "approved"]
+            ndp_approved = [r for r in worker.data["reports"]["ndp"]
+                            if r["user"] == selected and r.get("status") == "approved"]
             total_ndp = sum(r.get("count", 0) for r in ndp_approved)
             my_db = next((d for d in worker.data["databases"] if d["name"] == selected), None)
             if my_db:
@@ -854,13 +798,27 @@ elif user["role"] == "admin":
                 dibalas_db = sum(1 for n in my_db["numbers"] if n["status"] == "Dibalas")
             else:
                 total_db = done_db = dibalas_db = 0
-            pct = (dibalas_db / total_ndp * 100) if total_ndp > 0 else 0
-            c1, c2, c3 = st.columns(3)
-            c1.metric("NDP Diterima", total_ndp)
-            c2.metric("DB Dikerjakan", f"{done_db}/{total_db}")
-            c3.metric("Persentase", f"{pct:.1f}%")
+
+            video_approved = sum(1 for v in worker.data["reports"]["video"]
+                                 if v["user"] == selected and v.get("status") == "approved")
+            video_pending = sum(1 for v in worker.data["reports"]["video"]
+                                if v["user"] == selected and v.get("status", "pending") == "pending")
+
+            db_pct = (dibalas_db / total_ndp * 100) if total_ndp > 0 else 0
+            vid_total = video_approved + video_pending
+            video_pct = (video_approved / vid_total * 100) if vid_total > 0 else 0
+            kinerja = (db_pct + video_pct) / 2
+
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("NDP", total_ndp)
+            c2.metric("DB", f"{done_db}/{total_db}")
+            c3.metric("Video", f"{video_approved}/{vid_total}")
+            c4.metric("Kinerja", f"{kinerja:.1f}%")
+
+            st.progress(min(kinerja / 100, 1.0))
+
             if my_db:
-                st.write("**Rincian Status:**")
+                st.write("**Rincian Status DB:**")
                 counts = {}
                 for n in my_db["numbers"]:
                     counts[n["status"]] = counts.get(n["status"], 0) + 1
@@ -869,7 +827,8 @@ elif user["role"] == "admin":
 
     elif page == "Report":
         st.header("Laporan & Approval")
-        tab_ndp, tab_wd = st.tabs(["NDP", "Withdraw"])
+        tab_ndp, tab_wd, tab_video = st.tabs(["NDP", "Withdraw", "Video"])
+
         with tab_ndp:
             ndps = worker.data["reports"]["ndp"]
             pending = [(i, n) for i, n in enumerate(ndps) if n.get("status", "pending") == "pending"]
@@ -902,7 +861,9 @@ elif user["role"] == "admin":
                     c1, c2 = st.columns(2)
                     if c1.button("Approve", key=f"a_w_{i}", icon=":material/check_circle:"):
                         wds[i]["status"] = "approved"
-                        worker.data["payroll"][n["user"]] = max(worker.data["payroll"].get(n["user"], 0) - n["amount"], 0)
+                        worker.data["payroll"][n["user"]] = max(
+                            worker.data["payroll"].get(n["user"], 0) - n["amount"], 0
+                        )
                         save_key("payroll.json")
                         save_key("reports.json")
                         st.rerun()
@@ -911,21 +872,158 @@ elif user["role"] == "admin":
                         save_key("reports.json")
                         st.rerun()
 
+        # ===== TAB VIDEO =====
+        with tab_video:
+            vids = worker.data["reports"]["video"]
+
+            if not vids:
+                st.info("Belum ada video yang diupload.")
+            else:
+                now = datetime.now()
+                today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+                def _parse_t(s):
+                    try:
+                        return datetime.fromisoformat(s)
+                    except Exception:
+                        return datetime.min
+
+                pending_items   = [(i, v) for i, v in enumerate(vids)
+                                   if v.get("status", "pending") == "pending"]
+                hari_ini_items  = [(i, v) for i, v in enumerate(vids)
+                                   if _parse_t(v.get("time", "")) >= today_start
+                                   and v.get("status", "pending") != "pending"]
+                lalu_items      = [(i, v) for i, v in enumerate(vids)
+                                   if _parse_t(v.get("time", "")) < today_start]
+
+                sc1, sc2, sc3, sc4 = st.columns(4)
+                sc1.metric("Total", len(vids))
+                sc2.metric("Pending", len(pending_items))
+                sc3.metric("Hari ini", len(hari_ini_items))
+                sc4.metric("Lalu", len(lalu_items))
+
+                st.divider()
+
+                def render_video(idx, v):
+                    status = v.get("status", "pending")
+                    badge_map = {
+                        "pending":  "[PENDING]",
+                        "approved": "[APPROVED]",
+                        "rejected": "[REJECTED]",
+                    }
+                    badge = badge_map.get(status, "[?]")
+                    label = f"{badge} {v['user']} · {v.get('caption','-')}"
+
+                    with st.expander(label):
+                        st.markdown(
+                            f"{svg('clock', 14)} {v.get('time','-')} &nbsp; "
+                            f"{svg('package', 14)} {v.get('size_mb','-')} MB",
+                            unsafe_allow_html=True
+                        )
+
+                        url = v.get("url", "")
+                        if url:
+                            try:
+                                st.video(url)
+                            except Exception:
+                                st.warning("Video tidak bisa diputar langsung.")
+                            st.code(url, language="text")
+                            st.markdown(
+                                f"<a href='{url}' target='_blank' "
+                                f"style='display:inline-block;padding:8px 18px;"
+                                f"background:linear-gradient(135deg,#1E40AF,#3B82F6);"
+                                f"color:white;border-radius:10px;text-decoration:none;"
+                                f"font-weight:600;margin:6px 0;'>"
+                                f"{svg('download', 14, 'white')} Download / Buka</a>",
+                                unsafe_allow_html=True
+                            )
+                        else:
+                            st.warning("URL video tidak tersedia (data lama / upload gagal).")
+
+                        st.write("")
+                        c1, c2, c3 = st.columns(3)
+
+                        if c1.button("Approve", key=f"av_{idx}",
+                                     disabled=(status == "approved"),
+                                     use_container_width=True,
+                                     icon=":material/check_circle:"):
+                            vids[idx]["status"] = "approved"
+                            save_key("reports.json")
+                            st.toast(f"Video {v['user']} disetujui — kinerja +1")
+                            st.rerun()
+
+                        if c2.button("Reject", key=f"rv_{idx}",
+                                     disabled=(status == "rejected"),
+                                     use_container_width=True,
+                                     icon=":material/cancel:"):
+                            vids[idx]["status"] = "rejected"
+                            save_key("reports.json")
+                            st.rerun()
+
+                        if c3.button("Hapus", key=f"dv_{idx}",
+                                     use_container_width=True,
+                                     icon=":material/delete:"):
+                            st.session_state[f"cd_{idx}"] = True
+
+                        if st.session_state.get(f"cd_{idx}", False):
+                            st.error(f"Hapus permanen video **{v.get('caption','-')}**?")
+                            y1, y2 = st.columns(2)
+                            if y1.button("Ya, Hapus", key=f"y_{idx}",
+                                         type="primary", use_container_width=True):
+                                if v.get("url"):
+                                    worker.execute(worker.delete_video_catbox, v["url"])
+                                vids.pop(idx)
+                                save_key("reports.json")
+                                st.session_state[f"cd_{idx}"] = False
+                                st.success("Video dihapus dari Catbox & database.")
+                                st.rerun()
+                            if y2.button("Batal", key=f"n_{idx}",
+                                         use_container_width=True):
+                                st.session_state[f"cd_{idx}"] = False
+                                st.rerun()
+
+                s1, s2, s3 = st.tabs([
+                    f"Terbaru ({len(pending_items)})",
+                    f"Hari ini ({len(hari_ini_items)})",
+                    f"Lalu ({len(lalu_items)})"
+                ])
+
+                with s1:
+                    if not pending_items:
+                        st.success("Tidak ada video yang perlu di-review.")
+                    for idx, v in pending_items:
+                        render_video(idx, v)
+
+                with s2:
+                    if not hari_ini_items:
+                        st.info("Belum ada video yang diproses hari ini.")
+                    for idx, v in hari_ini_items:
+                        render_video(idx, v)
+
+                with s3:
+                    if not lalu_items:
+                        st.info("Tidak ada video lama.")
+                    for idx, v in lalu_items:
+                        render_video(idx, v)
+
 
 # ==========================================
 # 7. HALAMAN KARYAWAN
 # ==========================================
 else:
     if page == "Data":
-        st.header("🔒 Database Kerja Saya")
+        st.header("Database Kerja Saya")
         st.caption("Data ini privat — hanya Anda yang bisa melihat.")
 
         unread = [n for n in user.get("notifications", []) if not n.get("read", False)]
         if unread:
             with st.container(border=True):
-                st.markdown(f"📬 **{len(unread)} notifikasi baru dari admin**")
+                st.markdown(
+                    f"{svg('bell', 16)} <b>{len(unread)} notifikasi baru dari admin</b>",
+                    unsafe_allow_html=True
+                )
                 for n in unread:
-                    st.write(f"• {n['message']}")
+                    st.write(f"- {n['message']}")
                 if st.button("Tandai Dibaca", use_container_width=True, icon=":material/done_all:"):
                     for n in user.get("notifications", []):
                         n["read"] = True
@@ -941,7 +1039,8 @@ else:
                 with c2: st.code(item["num"], language="text")
                 with c3:
                     curr = statuses.index(item["status"]) if item["status"] in statuses else 0
-                    new_st = st.selectbox("Status", statuses, index=curr, key=f"st_{i}", label_visibility="collapsed")
+                    new_st = st.selectbox("Status", statuses, index=curr,
+                                          key=f"st_{i}", label_visibility="collapsed")
                     if new_st != item["status"]:
                         item["status"] = new_st
                         save_key("databases.json")
@@ -966,18 +1065,54 @@ else:
 
     elif page == "Upload":
         st.header("Upload Video")
-        vid = st.file_uploader("Pilih Video", type=["mp4", "mov"])
-        caption = st.text_input("Caption (1-10)")
-        if st.button("Upload", use_container_width=True, icon=":material/upload:") and vid and caption:
-            with st.spinner("Mengupload..."):
-                filename = f"{user['uid']}_{datetime.now().timestamp()}_{vid.name}"
-                worker.execute(worker.upload_file_s3, vid.getvalue(), filename)
-                worker.data["reports"]["video"].append({"user": user["name"], "file": filename, "caption": caption})
-                save_key("reports.json")
-            st.success("Video berhasil diupload!")
+
+        vid = st.file_uploader("Pilih Video (MP4/MOV)", type=["mp4", "mov"])
+
+        size_mb = 0
+        if vid is not None:
+            size_mb = round(len(vid.getvalue()) / (1024 * 1024), 2)
+            st.caption(f"Ukuran: **{size_mb} MB** / 200 MB (limit Catbox)")
+            if size_mb > 200:
+                st.error("File terlalu besar. Limit Catbox 200 MB.")
+                vid = None
+
+        caption = st.text_input("Caption (1-10 karakter)", max_chars=10)
+
+        if st.button("Upload", use_container_width=True, icon=":material/upload:"):
+            if vid is None:
+                st.error("Pilih video dulu!")
+            elif not caption or not (1 <= len(caption) <= 10):
+                st.error("Caption harus 1-10 karakter!")
+            else:
+                try:
+                    with st.spinner(f"Mengupload {size_mb} MB ke Catbox..."):
+                        url = worker.execute(
+                            worker.upload_video_catbox,
+                            vid.getvalue(),
+                            f"{user['uid']}_{int(datetime.now().timestamp())}_{vid.name}"
+                        )
+                        if isinstance(url, Exception) or not str(url).startswith("http"):
+                            raise Exception(str(url))
+
+                        worker.data["reports"]["video"].append({
+                            "user": user["name"],
+                            "url": url,
+                            "caption": caption,
+                            "size_mb": size_mb,
+                            "status": "pending",
+                            "time": str(datetime.now())
+                        })
+                        save_key("reports.json")
+
+                    st.success("Video berhasil diupload!")
+                    st.info(f"Link: {url}")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Upload gagal: {e}")
 
     elif page == "Teks":
         st.header("Teks Kerja")
         text_content = worker.data["texts"].get("content", "Belum ada teks.")
         st.code(text_content)
-        st.button("Copy Teks", icon=":material/content_copy:", on_click=lambda: st.toast("Teks disalin!"))
+        st.button("Copy Teks", icon=":material/content_copy:",
+                  on_click=lambda: st.toast("Teks disalin!"))
