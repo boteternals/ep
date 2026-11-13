@@ -5,8 +5,18 @@ import hashlib
 import uuid
 import queue
 import threading
+import re
+import botocore.handlers
 from datetime import datetime
 from botocore.exceptions import ClientError
+from botocore.client import Config
+
+# ==========================================
+# 0. PATCH BOTOCORE (WAJIB UNTUK HUGGING FACE S3)
+# ==========================================
+# Hugging Face S3 menggunakan format 'username/repo' yang mengandung '/'.
+# Standar AWS boto3 menolak '/'. Kita patch regex validasinya agar meloloskan '/'.
+botocore.handlers.VALID_BUCKET = re.compile(r"^[a-zA-Z0-9.\-_\/]{1,255}$")
 
 # ==========================================
 # 1. MANAJER S3 & QUEUE (ANTI-COLLISION)
@@ -16,12 +26,13 @@ def get_worker():
     """Membuat Worker tunggal yang berjalan di background thread."""
     class S3Worker:
         def __init__(self):
-            # Koneksi S3 dengan Endpoint yang benar
+            # Koneksi S3 dengan Path-Style Addressing
             self.s3 = boto3.client(
                 's3',
                 endpoint_url=st.secrets["S3_ENDPOINT_URL"],
                 aws_access_key_id=st.secrets["S3_ACCESS_KEY_ID"],
-                aws_secret_access_key=st.secrets["S3_SECRET_ACCESS_KEY"]
+                aws_secret_access_key=st.secrets["S3_SECRET_ACCESS_KEY"],
+                config=Config(s3={'addressing_style': 'path'}, signature_version='s3v4')
             )
             self.bucket = st.secrets["S3_BUCKET_NAME"]
             
@@ -44,46 +55,35 @@ def get_worker():
             admin_pwd = st.secrets.get("ADMIN_PASSWORD", "admin123")
             
             if not self.data["users"]:
-                # Database kosong, buat admin pertama kali
                 admin_hash = self.hash_pwd(admin_pwd)
                 self.data["users"].append({
-                    "uid": admin_uid, 
-                    "pass_hash": admin_hash, 
-                    "name": "Administrator", 
-                    "role": "admin", 
-                    "banned": False
+                    "uid": admin_uid, "pass_hash": admin_hash, 
+                    "name": "Administrator", "role": "admin", "banned": False
                 })
                 self._save("users.json", self.data["users"])
             else:
-                # Pastikan admin ada dan password sinkron dengan secrets
                 admin_found = False
                 for u in self.data["users"]:
                     if u["uid"] == admin_uid and u["role"] == "admin":
                         admin_found = True
-                        # Jika password di secrets diubah, update hash di database
                         if u["pass_hash"] != self.hash_pwd(admin_pwd):
                             u["pass_hash"] = self.hash_pwd(admin_pwd)
                             self._save("users.json", self.data["users"])
                         break
                 
                 if not admin_found:
-                    # Jika admin tidak ada di DB (misal terhapus manual), buat ulang
                     admin_hash = self.hash_pwd(admin_pwd)
                     self.data["users"].append({
-                        "uid": admin_uid, 
-                        "pass_hash": admin_hash, 
-                        "name": "Administrator", 
-                        "role": "admin", 
-                        "banned": False
+                        "uid": admin_uid, "pass_hash": admin_hash, 
+                        "name": "Administrator", "role": "admin", "banned": False
                     })
                     self._save("users.json", self.data["users"])
 
-            # Mulai background thread untuk memproses antrian
+            # Mulai background thread
             self.thread = threading.Thread(target=self._process_queue, daemon=True)
             self.thread.start()
 
         def hash_pwd(self, pwd):
-            # Pengganti bcrypt menggunakan SHA256 dengan salt statis
             salt = "elangpintar_secret_salt_2024"
             return hashlib.sha256(f"{salt}{pwd}".encode()).hexdigest()
 
@@ -92,14 +92,12 @@ def get_worker():
                 obj = self.s3.get_object(Bucket=self.bucket, Key=key)
                 return json.loads(obj['Body'].read().decode('utf-8'))
             except (ClientError, self.s3.exceptions.NoSuchKey):
-                # Jika file belum ada di S3, buat dengan default
                 self._save(key, default)
                 return default
             except Exception:
                 return default
 
         def _save(self, key, data):
-            # Fungsi dasar upload ke S3
             self.s3.put_object(
                 Bucket=self.bucket,
                 Key=key,
@@ -108,14 +106,12 @@ def get_worker():
             )
 
         def _process_queue(self):
-            """Looping abadi di background thread untuk memproses antrian satu per satu."""
             while True:
                 task = self.q.get()
                 if task is None: break
                 
                 func, args, kwargs, result_queue = task
                 
-                # Cek Reset Harian (00.00) setiap ada tugas masuk
                 today = datetime.now().date()
                 if self.last_reset_date != today:
                     self.data["databases"] = []
@@ -125,22 +121,18 @@ def get_worker():
                     self.last_reset_date = today
 
                 try:
-                    # Eksekusi tugas (Baca/Ubah/Simpan)
                     res = func(*args, **kwargs)
-                    result_queue.put(res) # Kembalikan hasil ke UI
+                    result_queue.put(res)
                 except Exception as e:
                     result_queue.put(e)
                 finally:
                     self.q.task_done()
 
         def execute(self, func, *args, **kwargs):
-            """Menambahkan tugas ke antrian dan menunggu hasilnya (Blocking)."""
             res_q = queue.Queue()
             self.q.put((func, args, kwargs, res_q))
-            # Menunggu sampai background thread selesai memproses tugas ini
             return res_q.get() 
 
-        # --- Fungsi Bisnis yang akan dimasukkan ke Queue ---
         def save_file(self, key, data):
             self.data[key.replace('.json', '')] = data
             self._save(key, data)
@@ -206,9 +198,7 @@ if user["role"] == "admin":
                     new_pwd = str(uuid.uuid4())[:6]
                     new_user = {"uid": new_uid, "pass_hash": worker.hash_pwd(new_pwd), "name": name, "role": "karyawan", "banned": False}
                     
-                    # Tambahkan ke memori lokal dulu untuk UI responsif
                     worker.data["users"].append(new_user)
-                    # Kirim ke antrian S3 (Anti-Collision)
                     with st.spinner("Menyimpan ke S3..."):
                         worker.execute(worker.save_file, "users.json", worker.data["users"])
                     
@@ -226,17 +216,20 @@ if user["role"] == "admin":
                         st.rerun()
 
         with tab3:
-            target = st.selectbox("Pilih Karyawan", [u["name"] for u in worker.data["users"] if u["role"] == "karyawan"])
-            db_input = st.text_area("Input Database (Pisahkan dengan koma)")
-            if st.button("Berikan DB"):
-                if target and db_input:
-                    nums = [n.strip() for n in db_input.split(",") if n.strip()]
-                    # Hapus DB lama milik user ini jika ada, lalu timpa
-                    worker.data["databases"] = [d for d in worker.data["databases"] if d["name"] != target]
-                    db_entry = {"name": target, "numbers": [{"num": n, "status": "Tidak Terdaftar"} for n in nums]}
-                    worker.data["databases"].append(db_entry)
-                    worker.execute(worker.save_file, "databases.json", worker.data["databases"])
-                    st.success("Database berhasil dibagikan!")
+            karyawan_list = [u["name"] for u in worker.data["users"] if u["role"] == "karyawan"]
+            if karyawan_list:
+                target = st.selectbox("Pilih Karyawan", karyawan_list)
+                db_input = st.text_area("Input Database (Pisahkan dengan koma)")
+                if st.button("Berikan DB"):
+                    if target and db_input:
+                        nums = [n.strip() for n in db_input.split(",") if n.strip()]
+                        worker.data["databases"] = [d for d in worker.data["databases"] if d["name"] != target]
+                        db_entry = {"name": target, "numbers": [{"num": n, "status": "Tidak Terdaftar"} for n in nums]}
+                        worker.data["databases"].append(db_entry)
+                        worker.execute(worker.save_file, "databases.json", worker.data["databases"])
+                        st.success("Database berhasil dibagikan!")
+            else:
+                st.info("Belum ada karyawan terdaftar.")
 
         with tab4:
             text_in = st.text_area("Input Teks Harian")
@@ -258,7 +251,6 @@ else:
         st.header("Profil & Dompet")
         st.write(f"UID: `{user['uid']}`")
         
-        # Saldo dummy
         my_payroll = worker.data["payroll"].get(user["name"], 0)
         st.metric("Saldo Dompet", f"Rp {my_payroll}")
         
@@ -279,7 +271,6 @@ else:
                 statuses = ["Tidak Terdaftar", "Terdaftar", "Dibaca", "Dibalas"]
                 curr_idx = statuses.index(item["status"]) if item["status"] in statuses else 0
                 
-                # Menggunakan selectbox agar user mudah mengubah status
                 new_status = col2.selectbox("Status", statuses, index=curr_idx, key=f"st_{user['uid']}_{i}")
                 
                 if new_status != item["status"]:
@@ -305,10 +296,8 @@ else:
         if st.button("Upload Video") and vid and caption:
             with st.spinner("Mengupload ke S3 (Queue)..."):
                 filename = f"{user['uid']}_{datetime.now().timestamp()}_{vid.name}"
-                # Masukkan upload task ke antrian agar tidak memblokir user lain
                 worker.execute(worker.upload_file_s3, vid.getvalue(), filename)
                 
-                # Simpan log video di reports
                 worker.data["reports"]["video"].append({"user": user["name"], "file": filename, "caption": caption})
                 worker.execute(worker.save_file, "reports.json", worker.data["reports"])
             st.success("Video berhasil diupload!")
