@@ -16,7 +16,7 @@ def get_worker():
     """Membuat Worker tunggal yang berjalan di background thread."""
     class S3Worker:
         def __init__(self):
-            # Koneksi S3
+            # Koneksi S3 dengan Endpoint yang benar
             self.s3 = boto3.client(
                 's3',
                 endpoint_url=st.secrets["S3_ENDPOINT_URL"],
@@ -39,11 +39,44 @@ def get_worker():
             
             self.last_reset_date = datetime.now().date()
             
-            # Jika user kosong, buat admin default
+            # --- INISIALISASI ADMIN DARI SECRETS ---
+            admin_uid = st.secrets.get("ADMIN_UID", "admin")
+            admin_pwd = st.secrets.get("ADMIN_PASSWORD", "admin123")
+            
             if not self.data["users"]:
-                admin_hash = self.hash_pwd("admin123")
-                self.data["users"].append({"uid": "admin", "pass_hash": admin_hash, "name": "Admin", "role": "admin", "banned": False})
+                # Database kosong, buat admin pertama kali
+                admin_hash = self.hash_pwd(admin_pwd)
+                self.data["users"].append({
+                    "uid": admin_uid, 
+                    "pass_hash": admin_hash, 
+                    "name": "Administrator", 
+                    "role": "admin", 
+                    "banned": False
+                })
                 self._save("users.json", self.data["users"])
+            else:
+                # Pastikan admin ada dan password sinkron dengan secrets
+                admin_found = False
+                for u in self.data["users"]:
+                    if u["uid"] == admin_uid and u["role"] == "admin":
+                        admin_found = True
+                        # Jika password di secrets diubah, update hash di database
+                        if u["pass_hash"] != self.hash_pwd(admin_pwd):
+                            u["pass_hash"] = self.hash_pwd(admin_pwd)
+                            self._save("users.json", self.data["users"])
+                        break
+                
+                if not admin_found:
+                    # Jika admin tidak ada di DB (misal terhapus manual), buat ulang
+                    admin_hash = self.hash_pwd(admin_pwd)
+                    self.data["users"].append({
+                        "uid": admin_uid, 
+                        "pass_hash": admin_hash, 
+                        "name": "Administrator", 
+                        "role": "admin", 
+                        "banned": False
+                    })
+                    self._save("users.json", self.data["users"])
 
             # Mulai background thread untuk memproses antrian
             self.thread = threading.Thread(target=self._process_queue, daemon=True)
