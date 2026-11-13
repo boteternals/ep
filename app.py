@@ -573,7 +573,7 @@ if page == "Akun":
                 <path d="M2 10h20"></path>
                 <circle cx="16" cy="14" r="1.5" fill="currentColor"></circle>
             </svg>
-            <span>Dompet Kucing</span>
+            <span>Dompet Elang</span>
         </div>
         <div class="wallet-balance">{fmt_rp(my_payroll)}</div>
         <div class="wallet-footer">
