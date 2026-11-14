@@ -1102,13 +1102,13 @@ else:
 
     # ===== MENU NDP (PENGAJUAN) — SEKARANG WAJIB + VIDEO =====
     elif page == "Pengajuan":
-        st.header("Pengajuan NDP + Video")
+        st.header("Pengajuan NDP")
         st.caption("Setiap pengajuan NDP **wajib disertai video bukti**.")
 
         with st.container(border=True):
             st.subheader("1. Data NDP")
             ndp_input = st.text_area(
-                "Masukkan Database NDP (pisahkan koma / enter)",
+                "Masukkan Database NDP",
                 key="ndp_input_text",
                 height=150
             )
@@ -1116,9 +1116,9 @@ else:
             st.caption(f"Terdeteksi **{preview}** item")
 
         with st.container(border=True):
-            st.subheader("2. Video Bukti (Wajib)")
+            st.subheader("2. Video Bukti *")
             vid = st.file_uploader(
-                "Pilih Video (MP4/MOV) — maks 200 MB",
+                "Pilih Video (MP4/MOV)",
                 type=["mp4", "mov"],
                 key="ndp_video_file"
             )
@@ -1131,7 +1131,7 @@ else:
                     vid = None
 
             caption = st.text_input(
-                "Caption Video (1-10 karakter)",
+                "Caption Video (1-10/11-20/dst)",
                 max_chars=10,
                 key="ndp_video_caption"
             )
@@ -1145,14 +1145,14 @@ else:
             if vid is None:
                 errors.append("Video bukti wajib diupload.")
             if not caption or not (1 <= len(caption) <= 10):
-                errors.append("Caption video harus 1-10 karakter.")
+                errors.append("Video harus memiliki Caption")
 
             if errors:
                 for e in errors:
                     st.error(e)
             else:
                 try:
-                    with st.spinner(f"Mengupload video ({size_mb} MB) & menyimpan NDP..."):
+                    with st.spinner(f"Mengupload video ({size_mb} MB)"):
                         key = worker.execute(
                             worker.upload_video_s3,
                             vid.getvalue(),
@@ -1172,7 +1172,7 @@ else:
                             "time": str(datetime.now())
                         })
                         save_key("reports.json")
-                    st.success("Pengajuan NDP + Video berhasil dikirim!")
+                    st.success("Pengajuan NDP dan Video berhasil dikirim!")
                     st.balloons()
                     st.rerun()
                 except Exception as e:
@@ -1204,7 +1204,7 @@ else:
 
     # ===== MENU UPLOAD (VIDEO STANDALONE / UMUM) =====
     elif page == "Upload":
-        st.header("Upload Video (Umum)")
+        st.header("Upload Video")
         st.caption("Gunakan menu ini untuk upload video di luar pengajuan NDP.")
 
         vid = st.file_uploader("Pilih Video (MP4/MOV)", type=["mp4", "mov"], key="up_vid")
@@ -1216,13 +1216,13 @@ else:
                 st.error("File terlalu besar. Maksimal 200 MB.")
                 vid = None
 
-        caption = st.text_input("Caption (1-10 karakter)", max_chars=10, key="up_cap")
+        caption = st.text_input("Caption", max_chars=10, key="up_cap")
 
         if st.button("Upload", use_container_width=True, icon=":material/upload:"):
             if vid is None:
                 st.error("Pilih video dulu!")
             elif not caption or not (1 <= len(caption) <= 10):
-                st.error("Caption harus 1-10 karakter!")
+                st.error("Contoh caption: 1-10")
             else:
                 try:
                     with st.spinner(f"Mengupload {size_mb} MB..."):
