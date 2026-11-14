@@ -7,6 +7,7 @@ import queue
 import threading
 import random
 import re
+import mimetypes
 import requests
 from datetime import datetime
 from botocore.exceptions import ClientError
@@ -379,18 +380,38 @@ def get_worker():
         # ===== CATBOX.MOE (anonim, tanpa userhash) =====
         def upload_video_catbox(self, file_bytes, filename):
             try:
+                if not file_bytes:
+                    return "ERROR: File kosong."
+
+                mime_type = mimetypes.guess_type(filename)[0] or "video/mp4"
+
                 r = requests.post(
                     self.CATBOX_API,
                     data={"reqtype": "fileupload"},
-                    files={"fileToUpload": (filename, file_bytes)},
-                    timeout=180
+                    files={"fileToUpload": (filename, bytes(file_bytes), mime_type)},
+                    timeout=(30, 240)
                 )
                 txt = r.text.strip()
-                if r.status_code == 200 and txt.startswith("http"):
+
+                if r.status_code == 200 and re.fullmatch(
+                    r"https?://files\.catbox\.moe/\S+", txt, flags=re.IGNORECASE
+                ):
                     return txt
-                return f"ERROR: {txt[:300]}"
+
+                if "invalid uploader" in txt.lower():
+                    return (
+                        f"ERROR: Catbox menolak upload anonim (HTTP {r.status_code}). "
+                        "Kemungkinan IP server Streamlit dibatasi Catbox."
+                    )
+
+                return f"ERROR: Catbox HTTP {r.status_code}: {txt[:300]}"
+
+            except requests.Timeout:
+                return "ERROR: Upload timeout, koneksi ke Catbox terlalu lama."
+            except requests.ConnectionError as e:
+                return f"ERROR: Koneksi ke Catbox gagal: {e}"
             except Exception as e:
-                return f"ERROR: {e}"
+                return f"ERROR: {type(e).__name__}: {e}"
 
         def delete_video_catbox(self, url):
             # Upload anonim tidak bisa dihapus dari Catbox
