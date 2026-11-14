@@ -25,25 +25,20 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-    .stApp {
-        background: radial-gradient(ellipse at top, #1E3A8A 0%, #0F172A 45%, #020617 100%);
-    }
+    .stApp { background: radial-gradient(ellipse at top, #1E3A8A 0%, #0F172A 45%, #020617 100%); }
     [data-testid="collapsedControl"] {display: none;}
     [data-testid="stSidebar"] {display: none;}
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
     .block-container { padding-bottom: 130px !important; padding-top: 2rem !important; }
-
     h1, h2, h3, h4, h5, h6 { color: #E0F2FE !important; }
     .stMarkdown p, label { color: #CBD5E1; }
 
-    /* === NAV BOTTOM === */
     div[data-testid="stRadio"] {
         position: fixed; bottom: 0; left: 0; right: 0;
         background: linear-gradient(180deg, #0B132B 0%, #020617 100%);
-        padding: 12px 5px 16px 5px;
-        z-index: 9999;
+        padding: 12px 5px 16px 5px; z-index: 9999;
         border-top: 1px solid #1E3A8A;
         box-shadow: 0 -8px 25px rgba(30, 64, 175, 0.35);
     }
@@ -59,8 +54,7 @@ st.markdown("""
         transition: background 0.25s ease, transform 0.2s ease;
     }
     div[data-testid="stRadio"] label:hover {
-        background: rgba(56, 189, 248, 0.08);
-        transform: translateY(-1px);
+        background: rgba(56, 189, 248, 0.08); transform: translateY(-1px);
     }
     div[data-testid="stRadio"] label::before {
         content: ''; position: absolute; top: -1px; left: 50%;
@@ -90,12 +84,10 @@ st.markdown("""
         transform: scale(1.12);
     }
 
-    /* === BUTTONS === */
     .stButton > button {
         background: linear-gradient(135deg, #1E40AF 0%, #3B82F6 100%);
         border: 1px solid #2563EB; color: white !important;
-        border-radius: 12px; font-weight: 600;
-        transition: all 0.2s ease;
+        border-radius: 12px; font-weight: 600; transition: all 0.2s ease;
         box-shadow: 0 2px 10px rgba(59, 130, 246, 0.3);
     }
     .stButton > button:hover {
@@ -107,20 +99,14 @@ st.markdown("""
         background: linear-gradient(135deg, #0EA5E9 0%, #38BDF8 100%);
         box-shadow: 0 4px 16px rgba(56, 189, 248, 0.45);
     }
-
-    /* === INPUTS === */
     .stTextInput input, .stTextArea textarea {
-        background: #0F172A !important;
-        border: 1px solid #1E3A8A !important;
-        color: #E0F2FE !important;
-        border-radius: 10px !important;
+        background: #0F172A !important; border: 1px solid #1E3A8A !important;
+        color: #E0F2FE !important; border-radius: 10px !important;
     }
     .stTextInput input:focus, .stTextArea textarea:focus {
         border-color: #3B82F6 !important;
         box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3) !important;
     }
-
-    /* === TABS === */
     .stTabs [data-baseweb="tab-list"] {
         background: #0F172A; border-radius: 12px;
         padding: 4px; gap: 4px; border: 1px solid #1E3A8A;
@@ -132,8 +118,6 @@ st.markdown("""
         background: linear-gradient(135deg, #1E40AF, #3B82F6) !important;
         color: white !important;
     }
-
-    /* === PROFILE CARD === */
     .profile-card {
         background: linear-gradient(135deg, #1E3A8A 0%, #3B82F6 100%);
         border-radius: 20px; padding: 20px; color: white;
@@ -150,8 +134,6 @@ st.markdown("""
     }
     .profile-info h3 { margin: 0; font-size: 20px; font-weight: 700; color: white !important; }
     .profile-info p { margin: 5px 0 0 0; font-size: 13px; color: rgba(255,255,255,0.85) !important; }
-
-    /* === WALLET CARD === */
     .wallet-card {
         background: linear-gradient(135deg, #1E40AF 0%, #3B82F6 45%, #0EA5E9 100%);
         border-radius: 24px; padding: 22px 24px; color: white;
@@ -164,12 +146,6 @@ st.markdown("""
         content: ''; position: absolute; top: -60%; right: -20%;
         width: 200%; height: 200%;
         background: radial-gradient(circle, rgba(255,255,255,0.18) 0%, transparent 55%);
-        pointer-events: none;
-    }
-    .wallet-card::after {
-        content: ''; position: absolute; bottom: -40%; left: -20%;
-        width: 150%; height: 150%;
-        background: radial-gradient(circle, rgba(14, 165, 233, 0.3) 0%, transparent 60%);
         pointer-events: none;
     }
     .wallet-header {
@@ -193,8 +169,6 @@ st.markdown("""
         border-radius: 20px; font-size: 11px; font-weight: 600;
         backdrop-filter: blur(6px);
     }
-
-    /* === LIST ITEM === */
     .list-item {
         background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%);
         padding: 14px 16px; border-radius: 14px; margin-bottom: 10px;
@@ -237,7 +211,6 @@ _SVG_PATHS = {
 }
 
 def svg(name, size=16, color="#38BDF8"):
-    """Render inline SVG icon."""
     path = _SVG_PATHS.get(name, "")
     return (
         f'<svg width="{size}" height="{size}" viewBox="0 0 24 24" fill="none" '
@@ -246,7 +219,6 @@ def svg(name, size=16, color="#38BDF8"):
     )
 
 def svg_html(name, text, size=16, color="#38BDF8"):
-    """SVG + label sebagai satu string HTML."""
     return f"{svg(name, size, color)} <span style='vertical-align:middle;'>{text}</span>"
 
 
@@ -374,9 +346,7 @@ def get_worker():
             self.s3.put_object(Bucket=self.bucket, Key=f"uploads/{filename}", Body=file_bytes)
             return True
 
-        # ===== VIDEO DI S3 =====
         def upload_video_s3(self, file_bytes, filename):
-            """Simpan video di bucket S3 (folder videos/). Return key, atau 'ERROR: ...'."""
             try:
                 if not file_bytes:
                     return "ERROR: File kosong."
@@ -392,7 +362,6 @@ def get_worker():
                 return f"ERROR: {type(e).__name__}: {e}"
 
         def video_link(self, key, expires=3600):
-            """Link sementara (presigned) untuk memutar/mengunduh video."""
             try:
                 return self.s3.generate_presigned_url(
                     "get_object",
@@ -573,7 +542,6 @@ if page == "Akun":
 
     st.write("")
 
-    # === PENGATURAN AKUN ===
     with st.expander("Pengaturan Akun", expanded=False):
         with st.form("settings_form"):
             st.write("**Ubah Username & Telegram**")
@@ -616,7 +584,6 @@ if page == "Akun":
         del st.session_state.user
         st.rerun()
 
-    # === WITHDRAW & REKENING ===
     if st.session_state.get("show_withdraw", False):
         st.divider()
         st.subheader("Pengaturan Rekening & Withdraw")
@@ -789,9 +756,11 @@ elif user["role"] == "admin":
             st.info("Belum ada karyawan.")
         else:
             selected = st.selectbox("Pilih Karyawan", employees)
+
             ndp_approved = [r for r in worker.data["reports"]["ndp"]
                             if r["user"] == selected and r.get("status") == "approved"]
             total_ndp = sum(r.get("count", 0) for r in ndp_approved)
+
             my_db = next((d for d in worker.data["databases"] if d["name"] == selected), None)
             if my_db:
                 total_db = len(my_db["numbers"])
@@ -800,13 +769,29 @@ elif user["role"] == "admin":
             else:
                 total_db = done_db = dibalas_db = 0
 
-            video_approved = sum(1 for v in worker.data["reports"]["video"]
-                                 if v["user"] == selected and v.get("status") == "approved")
-            video_pending = sum(1 for v in worker.data["reports"]["video"]
-                                if v["user"] == selected and v.get("status", "pending") == "pending")
+            # === HITUNG VIDEO: gabungan NDP video + standalone upload video ===
+            ndp_vid_approved = sum(
+                1 for n in worker.data["reports"]["ndp"]
+                if n["user"] == selected and n.get("status") == "approved" and n.get("video_key")
+            )
+            ndp_vid_pending = sum(
+                1 for n in worker.data["reports"]["ndp"]
+                if n["user"] == selected and n.get("status", "pending") == "pending" and n.get("video_key")
+            )
+            stand_vid_approved = sum(
+                1 for v in worker.data["reports"]["video"]
+                if v["user"] == selected and v.get("status") == "approved"
+            )
+            stand_vid_pending = sum(
+                1 for v in worker.data["reports"]["video"]
+                if v["user"] == selected and v.get("status", "pending") == "pending"
+            )
+
+            video_approved = ndp_vid_approved + stand_vid_approved
+            video_pending  = ndp_vid_pending + stand_vid_pending
+            vid_total = video_approved + video_pending
 
             db_pct = (dibalas_db / total_ndp * 100) if total_ndp > 0 else 0
-            vid_total = video_approved + video_pending
             video_pct = (video_approved / vid_total * 100) if vid_total > 0 else 0
             kinerja = (db_pct + video_pct) / 2
 
@@ -828,29 +813,121 @@ elif user["role"] == "admin":
 
     elif page == "Report":
         st.header("Laporan & Approval")
-        tab_ndp, tab_wd, tab_video = st.tabs(["NDP", "Withdraw", "Video"])
+        # === TAB: Cek NDP + Video, Withdraw, Video Standalone ===
+        tab_ndp, tab_wd, tab_video = st.tabs(["Cek NDP+Video", "Withdraw", "Video Standalone"])
 
+        # ===== TAB NDP + VIDEO =====
         with tab_ndp:
             ndps = worker.data["reports"]["ndp"]
             pending = [(i, n) for i, n in enumerate(ndps) if n.get("status", "pending") == "pending"]
-            st.subheader(f"Pending ({len(pending)})")
+            history = [(i, n) for i, n in enumerate(ndps) if n.get("status", "pending") != "pending"]
+
+            sc1, sc2, sc3 = st.columns(3)
+            sc1.metric("Total", len(ndps))
+            sc2.metric("Pending", len(pending))
+            sc3.metric("Selesai", len(history))
+
+            st.divider()
+
+            if not pending:
+                st.success("Tidak ada pengajuan NDP yang menunggu review.")
+
             for i, n in pending:
-                with st.expander(f"{n['user']} — {n.get('count', 0)} item"):
-                    st.code(n["data"])
-                    c1, c2 = st.columns(2)
-                    if c1.button("Approve", key=f"a_n_{i}", icon=":material/check_circle:"):
+                vkey = n.get("video_key")
+                v_cap = n.get("video_caption", "-")
+                v_size = n.get("video_size_mb", "-")
+                has_vid = f" · Video: {v_cap}" if vkey else " · TANPA VIDEO"
+
+                with st.expander(f"{n['user']} — {n.get('count', 0)} item{has_vid}"):
+                    st.write("**Data NDP:**")
+                    st.code(n["data"] or "(kosong)", language="text")
+
+                    st.write("**Video Bukti:**")
+                    if vkey:
+                        url = worker.video_link(vkey)
+                        if url:
+                            try:
+                                st.video(url)
+                            except Exception:
+                                st.warning("Video tidak bisa diputar langsung.")
+                            st.markdown(
+                                f"<a href='{url}' target='_blank' "
+                                f"style='display:inline-block;padding:8px 18px;"
+                                f"background:linear-gradient(135deg,#1E40AF,#3B82F6);"
+                                f"color:white;border-radius:10px;text-decoration:none;"
+                                f"font-weight:600;margin:6px 0;'>"
+                                f"{svg('download', 14, 'white')} Download / Buka Video</a>",
+                                unsafe_allow_html=True
+                            )
+                        else:
+                            st.warning("URL video tidak tersedia.")
+                        st.caption(f"Caption: **{v_cap}** · {v_size} MB · Key: `{vkey}`")
+                    else:
+                        st.warning("Pengajuan ini TIDAK ada video (data lama / bug).")
+
+                    st.caption(f"Waktu: {n.get('time', '-')}")
+
+                    st.write("")
+                    c1, c2, c3 = st.columns(3)
+                    if c1.button("Approve", key=f"a_n_{i}", use_container_width=True,
+                                 icon=":material/check_circle:"):
                         ndps[i]["status"] = "approved"
                         save_key("reports.json")
+                        st.toast(f"NDP {n['user']} disetujui")
                         st.rerun()
-                    if c2.button("Reject", key=f"r_n_{i}", icon=":material/cancel:"):
+                    if c2.button("Reject", key=f"r_n_{i}", use_container_width=True,
+                                 icon=":material/cancel:"):
                         ndps[i]["status"] = "rejected"
                         save_key("reports.json")
+                        st.toast(f"NDP {n['user']} ditolak")
                         st.rerun()
-            st.subheader("History")
-            for n in [x for x in ndps if x.get("status", "pending") != "pending"]:
-                badge = "APPROVED" if n["status"] == "approved" else "REJECTED"
-                st.write(f"[{badge}] {n['user']} — {n.get('count', 0)} item")
+                    if c3.button("Hapus", key=f"del_n_{i}", use_container_width=True,
+                                 icon=":material/delete:"):
+                        st.session_state[f"cd_ndp_{i}"] = True
 
+                    if st.session_state.get(f"cd_ndp_{i}", False):
+                        st.error("Hapus permanen pengajuan NDP ini beserta video?")
+                        y1, y2 = st.columns(2)
+                        if y1.button("Ya, Hapus", key=f"y_ndp_{i}", type="primary", use_container_width=True):
+                            if vkey:
+                                worker.execute(worker.delete_video_s3, vkey)
+                            ndps.pop(i)
+                            save_key("reports.json")
+                            st.session_state[f"cd_ndp_{i}"] = False
+                            st.success("NDP + video dihapus.")
+                            st.rerun()
+                        if y2.button("Batal", key=f"n_ndp_{i}", use_container_width=True):
+                            st.session_state[f"cd_ndp_{i}"] = False
+                            st.rerun()
+
+            st.subheader("History")
+            if not history:
+                st.info("Belum ada riwayat.")
+            for i, n in history:
+                badge = "APPROVED" if n["status"] == "approved" else "REJECTED"
+                vmark = " · [VIDEO]" if n.get("video_key") else " · [NO-VIDEO]"
+                with st.expander(f"[{badge}] {n['user']} — {n.get('count', 0)} item{vmark}"):
+                    st.write("**Data NDP:**")
+                    st.code(n["data"] or "(kosong)", language="text")
+                    vkey = n.get("video_key")
+                    if vkey:
+                        url = worker.video_link(vkey)
+                        if url:
+                            try:
+                                st.video(url)
+                            except Exception:
+                                st.warning("Video tidak bisa diputar.")
+                            st.markdown(
+                                f"<a href='{url}' target='_blank' "
+                                f"style='display:inline-block;padding:6px 14px;"
+                                f"background:#1E40AF;color:white;border-radius:8px;"
+                                f"text-decoration:none;font-size:12px;'>"
+                                f"{svg('download', 12, 'white')} Buka Video</a>",
+                                unsafe_allow_html=True
+                            )
+                    st.caption(f"Waktu: {n.get('time', '-')}")
+
+        # ===== TAB WITHDRAW =====
         with tab_wd:
             wds = worker.data["reports"]["wd"]
             pending_wd = [(i, n) for i, n in enumerate(wds) if n.get("status", "pending") == "pending"]
@@ -873,12 +950,11 @@ elif user["role"] == "admin":
                         save_key("reports.json")
                         st.rerun()
 
-        # ===== TAB VIDEO =====
+        # ===== TAB VIDEO STANDALONE (dari menu Upload) =====
         with tab_video:
             vids = worker.data["reports"]["video"]
-
             if not vids:
-                st.info("Belum ada video yang diupload.")
+                st.info("Belum ada video standalone.")
             else:
                 now = datetime.now()
                 today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -907,11 +983,7 @@ elif user["role"] == "admin":
 
                 def render_video(idx, v):
                     status = v.get("status", "pending")
-                    badge_map = {
-                        "pending":  "[PENDING]",
-                        "approved": "[APPROVED]",
-                        "rejected": "[REJECTED]",
-                    }
+                    badge_map = {"pending": "[PENDING]", "approved": "[APPROVED]", "rejected": "[REJECTED]"}
                     badge = badge_map.get(status, "[?]")
                     label = f"{badge} {v['user']} · {v.get('caption','-')}"
 
@@ -921,17 +993,12 @@ elif user["role"] == "admin":
                             f"{svg('package', 14)} {v.get('size_mb','-')} MB",
                             unsafe_allow_html=True
                         )
-
-                        if v.get("key"):
-                            url = worker.video_link(v["key"])
-                        else:
-                            url = v.get("url", "")
+                        url = worker.video_link(v["key"]) if v.get("key") else v.get("url", "")
                         if url:
                             try:
                                 st.video(url)
                             except Exception:
                                 st.warning("Video tidak bisa diputar langsung.")
-                            st.code(url, language="text")
                             st.markdown(
                                 f"<a href='{url}' target='_blank' "
                                 f"style='display:inline-block;padding:8px 18px;"
@@ -942,47 +1009,37 @@ elif user["role"] == "admin":
                                 unsafe_allow_html=True
                             )
                         else:
-                            st.warning("URL video tidak tersedia (data lama / upload gagal).")
+                            st.warning("URL video tidak tersedia.")
 
-                        st.write("")
                         c1, c2, c3 = st.columns(3)
-
                         if c1.button("Approve", key=f"av_{idx}",
                                      disabled=(status == "approved"),
-                                     use_container_width=True,
-                                     icon=":material/check_circle:"):
+                                     use_container_width=True, icon=":material/check_circle:"):
                             vids[idx]["status"] = "approved"
                             save_key("reports.json")
-                            st.toast(f"Video {v['user']} disetujui — kinerja +1")
                             st.rerun()
-
                         if c2.button("Reject", key=f"rv_{idx}",
                                      disabled=(status == "rejected"),
-                                     use_container_width=True,
-                                     icon=":material/cancel:"):
+                                     use_container_width=True, icon=":material/cancel:"):
                             vids[idx]["status"] = "rejected"
                             save_key("reports.json")
                             st.rerun()
-
                         if c3.button("Hapus", key=f"dv_{idx}",
-                                     use_container_width=True,
-                                     icon=":material/delete:"):
+                                     use_container_width=True, icon=":material/delete:"):
                             st.session_state[f"cd_{idx}"] = True
 
                         if st.session_state.get(f"cd_{idx}", False):
                             st.error(f"Hapus permanen video **{v.get('caption','-')}**?")
                             y1, y2 = st.columns(2)
-                            if y1.button("Ya, Hapus", key=f"y_{idx}",
-                                         type="primary", use_container_width=True):
+                            if y1.button("Ya, Hapus", key=f"y_{idx}", type="primary", use_container_width=True):
                                 if v.get("key"):
                                     worker.execute(worker.delete_video_s3, v["key"])
                                 vids.pop(idx)
                                 save_key("reports.json")
                                 st.session_state[f"cd_{idx}"] = False
-                                st.success("Video dihapus dari storage & database.")
+                                st.success("Video dihapus.")
                                 st.rerun()
-                            if y2.button("Batal", key=f"n_{idx}",
-                                         use_container_width=True):
+                            if y2.button("Batal", key=f"n_{idx}", use_container_width=True):
                                 st.session_state[f"cd_{idx}"] = False
                                 st.rerun()
 
@@ -991,24 +1048,15 @@ elif user["role"] == "admin":
                     f"Hari ini ({len(hari_ini_items)})",
                     f"Lalu ({len(lalu_items)})"
                 ])
-
                 with s1:
-                    if not pending_items:
-                        st.success("Tidak ada video yang perlu di-review.")
-                    for idx, v in pending_items:
-                        render_video(idx, v)
-
+                    if not pending_items: st.success("Tidak ada video pending.")
+                    for idx, v in pending_items: render_video(idx, v)
                 with s2:
-                    if not hari_ini_items:
-                        st.info("Belum ada video yang diproses hari ini.")
-                    for idx, v in hari_ini_items:
-                        render_video(idx, v)
-
+                    if not hari_ini_items: st.info("Belum ada video diproses hari ini.")
+                    for idx, v in hari_ini_items: render_video(idx, v)
                 with s3:
-                    if not lalu_items:
-                        st.info("Tidak ada video lama.")
-                    for idx, v in lalu_items:
-                        render_video(idx, v)
+                    if not lalu_items: st.info("Tidak ada video lama.")
+                    for idx, v in lalu_items: render_video(idx, v)
 
 
 # ==========================================
@@ -1052,26 +1100,114 @@ else:
         else:
             st.warning("Belum ada database. Admin akan mengirim via private.")
 
+    # ===== MENU NDP (PENGAJUAN) — SEKARANG WAJIB + VIDEO =====
     elif page == "Pengajuan":
-        st.header("Pengajuan NDP")
-        ndp_input = st.text_area("Masukkan Database (koma/enter)")
-        preview = count_items(ndp_input)
-        st.caption(f"Terdeteksi **{preview}** item")
-        if st.button("Ajukan NDP", use_container_width=True, icon=":material/send:"):
-            if ndp_input.strip():
-                worker.data["reports"]["ndp"].append({
-                    "user": user["name"], "data": ndp_input, "count": preview,
-                    "status": "pending", "time": str(datetime.now())
-                })
-                save_key("reports.json")
-                st.success("Pengajuan dikirim!")
-                st.rerun()
+        st.header("Pengajuan NDP + Video")
+        st.caption("Setiap pengajuan NDP **wajib disertai video bukti**.")
 
+        with st.container(border=True):
+            st.subheader("1. Data NDP")
+            ndp_input = st.text_area(
+                "Masukkan Database NDP (pisahkan koma / enter)",
+                key="ndp_input_text",
+                height=150
+            )
+            preview = count_items(ndp_input)
+            st.caption(f"Terdeteksi **{preview}** item")
+
+        with st.container(border=True):
+            st.subheader("2. Video Bukti (Wajib)")
+            vid = st.file_uploader(
+                "Pilih Video (MP4/MOV) — maks 200 MB",
+                type=["mp4", "mov"],
+                key="ndp_video_file"
+            )
+            size_mb = 0
+            if vid is not None:
+                size_mb = round(len(vid.getvalue()) / (1024 * 1024), 2)
+                st.caption(f"Ukuran: **{size_mb} MB** / 200 MB")
+                if size_mb > 200:
+                    st.error("File terlalu besar. Maksimal 200 MB.")
+                    vid = None
+
+            caption = st.text_input(
+                "Caption Video (1-10 karakter)",
+                max_chars=10,
+                key="ndp_video_caption"
+            )
+
+        st.write("")
+        if st.button("Ajukan NDP + Video", use_container_width=True, type="primary",
+                     icon=":material/send:"):
+            errors = []
+            if not ndp_input.strip():
+                errors.append("Data NDP wajib diisi.")
+            if vid is None:
+                errors.append("Video bukti wajib diupload.")
+            if not caption or not (1 <= len(caption) <= 10):
+                errors.append("Caption video harus 1-10 karakter.")
+
+            if errors:
+                for e in errors:
+                    st.error(e)
+            else:
+                try:
+                    with st.spinner(f"Mengupload video ({size_mb} MB) & menyimpan NDP..."):
+                        key = worker.execute(
+                            worker.upload_video_s3,
+                            vid.getvalue(),
+                            f"{user['uid']}_{int(datetime.now().timestamp())}_{vid.name}"
+                        )
+                        if isinstance(key, Exception) or not str(key).startswith("videos/"):
+                            raise Exception(str(key))
+
+                        worker.data["reports"]["ndp"].append({
+                            "user": user["name"],
+                            "data": ndp_input,
+                            "count": preview,
+                            "video_key": key,
+                            "video_caption": caption,
+                            "video_size_mb": size_mb,
+                            "status": "pending",
+                            "time": str(datetime.now())
+                        })
+                        save_key("reports.json")
+                    st.success("Pengajuan NDP + Video berhasil dikirim!")
+                    st.balloons()
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Gagal upload: {e}")
+
+        # Riwayat singkat
+        st.divider()
+        st.subheader("Riwayat Pengajuan Saya")
+        my_ndps = [(i, n) for i, n in enumerate(worker.data["reports"]["ndp"])
+                   if n["user"] == user["name"]]
+        if not my_ndps:
+            st.info("Belum ada pengajuan.")
+        else:
+            for i, n in reversed(my_ndps):
+                stt = n.get("status", "pending")
+                icon_map = {"pending": "PENDING", "approved": "APPROVED", "rejected": "REJECTED"}
+                mark = "VIDEO" if n.get("video_key") else "NO-VIDEO"
+                with st.expander(f"[{icon_map.get(stt, stt.upper())}] {n.get('count', 0)} item · {mark}"):
+                    st.code(n["data"] or "(kosong)", language="text")
+                    if n.get("video_key"):
+                        url = worker.video_link(n["video_key"])
+                        if url:
+                            try:
+                                st.video(url)
+                            except Exception:
+                                st.warning("Video tidak bisa diputar.")
+                        st.caption(f"Caption: **{n.get('video_caption','-')}** · {n.get('video_size_mb','-')} MB")
+                    st.caption(f"Waktu: {n.get('time', '-')}")
+
+    # ===== MENU UPLOAD (VIDEO STANDALONE / UMUM) =====
     elif page == "Upload":
-        st.header("Upload Video")
+        st.header("Upload Video (Umum)")
+        st.caption("Gunakan menu ini untuk upload video di luar pengajuan NDP.")
 
-        vid = st.file_uploader("Pilih Video (MP4/MOV)", type=["mp4", "mov"])
-
+        vid = st.file_uploader("Pilih Video (MP4/MOV)", type=["mp4", "mov"], key="up_vid")
         size_mb = 0
         if vid is not None:
             size_mb = round(len(vid.getvalue()) / (1024 * 1024), 2)
@@ -1080,7 +1216,7 @@ else:
                 st.error("File terlalu besar. Maksimal 200 MB.")
                 vid = None
 
-        caption = st.text_input("Caption (1-10 karakter)", max_chars=10)
+        caption = st.text_input("Caption (1-10 karakter)", max_chars=10, key="up_cap")
 
         if st.button("Upload", use_container_width=True, icon=":material/upload:"):
             if vid is None:
@@ -1107,7 +1243,6 @@ else:
                             "time": str(datetime.now())
                         })
                         save_key("reports.json")
-
                     st.success("Video berhasil diupload!")
                     st.rerun()
                 except Exception as e:
@@ -1119,4 +1254,3 @@ else:
         st.code(text_content)
         st.button("Copy Teks", icon=":material/content_copy:",
                   on_click=lambda: st.toast("Teks disalin!"))
-
