@@ -256,9 +256,6 @@ def svg_html(name, text, size=16, color="#38BDF8"):
 @st.cache_resource
 def get_worker():
     class S3Worker:
-        # Catbox anonim: tanpa userhash
-        CATBOX_API = "https://catbox.moe/user/api.php"
-
         def __init__(self):
             raw_bucket = st.secrets.get("S3_BUCKET_NAME", "SatyaDev13/ElangP")
             if "/" in raw_bucket:
@@ -377,45 +374,40 @@ def get_worker():
             self.s3.put_object(Bucket=self.bucket, Key=f"uploads/{filename}", Body=file_bytes)
             return True
 
-        # ===== CATBOX.MOE (anonim, tanpa userhash) =====
-        def upload_video_catbox(self, file_bytes, filename):
+        # ===== VIDEO DI S3 =====
+        def upload_video_s3(self, file_bytes, filename):
+            """Simpan video di bucket S3 (folder videos/). Return key, atau 'ERROR: ...'."""
             try:
                 if not file_bytes:
                     return "ERROR: File kosong."
-
+                safe = re.sub(r"[^A-Za-z0-9._-]", "_", filename)
+                key = f"videos/{safe}"
                 mime_type = mimetypes.guess_type(filename)[0] or "video/mp4"
-
-                r = requests.post(
-                    self.CATBOX_API,
-                    data={"reqtype": "fileupload"},
-                    files={"fileToUpload": (filename, bytes(file_bytes), mime_type)},
-                    timeout=(30, 240)
+                self.s3.put_object(
+                    Bucket=self.bucket, Key=key,
+                    Body=bytes(file_bytes), ContentType=mime_type
                 )
-                txt = r.text.strip()
-
-                if r.status_code == 200 and re.fullmatch(
-                    r"https?://files\.catbox\.moe/\S+", txt, flags=re.IGNORECASE
-                ):
-                    return txt
-
-                if "invalid uploader" in txt.lower():
-                    return (
-                        f"ERROR: Catbox menolak upload anonim (HTTP {r.status_code}). "
-                        "Kemungkinan IP server Streamlit dibatasi Catbox."
-                    )
-
-                return f"ERROR: Catbox HTTP {r.status_code}: {txt[:300]}"
-
-            except requests.Timeout:
-                return "ERROR: Upload timeout, koneksi ke Catbox terlalu lama."
-            except requests.ConnectionError as e:
-                return f"ERROR: Koneksi ke Catbox gagal: {e}"
+                return key
             except Exception as e:
                 return f"ERROR: {type(e).__name__}: {e}"
 
-        def delete_video_catbox(self, url):
-            # Upload anonim tidak bisa dihapus dari Catbox
-            return "SKIP"
+        def video_link(self, key, expires=3600):
+            """Link sementara (presigned) untuk memutar/mengunduh video."""
+            try:
+                return self.s3.generate_presigned_url(
+                    "get_object",
+                    Params={"Bucket": self.bucket, "Key": key},
+                    ExpiresIn=expires
+                )
+            except Exception:
+                return ""
+
+        def delete_video_s3(self, key):
+            try:
+                self.s3.delete_object(Bucket=self.bucket, Key=key)
+                return "OK"
+            except Exception as e:
+                return f"ERROR: {e}"
 
     return S3Worker()
 
@@ -930,7 +922,10 @@ elif user["role"] == "admin":
                             unsafe_allow_html=True
                         )
 
-                        url = v.get("url", "")
+                        if v.get("key"):
+                            url = worker.video_link(v["key"])
+                        else:
+                            url = v.get("url", "")
                         if url:
                             try:
                                 st.video(url)
@@ -975,15 +970,16 @@ elif user["role"] == "admin":
                             st.session_state[f"cd_{idx}"] = True
 
                         if st.session_state.get(f"cd_{idx}", False):
-                            st.error(f"Hapus video **{v.get('caption','-')}** dari database?")
-                            st.caption("File di Catbox tetap ada (upload anonim tidak bisa dihapus).")
+                            st.error(f"Hapus permanen video **{v.get('caption','-')}**?")
                             y1, y2 = st.columns(2)
                             if y1.button("Ya, Hapus", key=f"y_{idx}",
                                          type="primary", use_container_width=True):
+                                if v.get("key"):
+                                    worker.execute(worker.delete_video_s3, v["key"])
                                 vids.pop(idx)
                                 save_key("reports.json")
                                 st.session_state[f"cd_{idx}"] = False
-                                st.success("Video dihapus dari database.")
+                                st.success("Video dihapus dari storage & database.")
                                 st.rerun()
                             if y2.button("Batal", key=f"n_{idx}",
                                          use_container_width=True):
@@ -1079,9 +1075,9 @@ else:
         size_mb = 0
         if vid is not None:
             size_mb = round(len(vid.getvalue()) / (1024 * 1024), 2)
-            st.caption(f"Ukuran: **{size_mb} MB** / 200 MB (limit Catbox)")
+            st.caption(f"Ukuran: **{size_mb} MB** / 200 MB")
             if size_mb > 200:
-                st.error("File terlalu besar. Limit Catbox 200 MB.")
+                st.error("File terlalu besar. Maksimal 200 MB.")
                 vid = None
 
         caption = st.text_input("Caption (1-10 karakter)", max_chars=10)
@@ -1093,18 +1089,18 @@ else:
                 st.error("Caption harus 1-10 karakter!")
             else:
                 try:
-                    with st.spinner(f"Mengupload {size_mb} MB ke Catbox..."):
-                        url = worker.execute(
-                            worker.upload_video_catbox,
+                    with st.spinner(f"Mengupload {size_mb} MB..."):
+                        key = worker.execute(
+                            worker.upload_video_s3,
                             vid.getvalue(),
                             f"{user['uid']}_{int(datetime.now().timestamp())}_{vid.name}"
                         )
-                        if isinstance(url, Exception) or not str(url).startswith("http"):
-                            raise Exception(str(url))
+                        if isinstance(key, Exception) or not str(key).startswith("videos/"):
+                            raise Exception(str(key))
 
                         worker.data["reports"]["video"].append({
                             "user": user["name"],
-                            "url": url,
+                            "key": key,
                             "caption": caption,
                             "size_mb": size_mb,
                             "status": "pending",
@@ -1113,7 +1109,6 @@ else:
                         save_key("reports.json")
 
                     st.success("Video berhasil diupload!")
-                    st.info(f"Link: {url}")
                     st.rerun()
                 except Exception as e:
                     st.error(f"Upload gagal: {e}")
