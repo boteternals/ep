@@ -271,11 +271,9 @@ def get_worker():
             )
             self.bucket = bucket_name
             self.q = queue.Queue()
-            
-            # --- UPDATE: Struktur teks sekarang berupa list ---
+
             texts_raw = self._load("texts.json", [])
             if isinstance(texts_raw, dict) and "content" in texts_raw:
-                # Migrasi data lama (jika sebelumnya berupa dict) ke format list
                 old_content = texts_raw.get("content", "")
                 if old_content:
                     texts_raw = [{"id": uuid.uuid4().hex, "title": "Teks Kerja Utama", "content": old_content}]
@@ -286,11 +284,25 @@ def get_worker():
             self.data = {
                 "users": self._load("users.json", []),
                 "databases": self._load("databases.json", []),
-                "texts": texts_raw, # <--- Diperbarui
+                "texts": texts_raw,
                 "payroll": self._load("payroll.json", {}),
                 "reports": self._load("reports.json", {"ndp": [], "wd": [], "video": []}),
                 "sessions": self._load("sessions.json", {})
             }
+
+            # --- MIGRASI: pastikan setiap item DB punya 'name' & 'id' unik ---
+            _needs_mig = False
+            for d in self.data["databases"]:
+                for n in d.get("numbers", []):
+                    if "name" not in n:
+                        n["name"] = ""
+                        _needs_mig = True
+                    if "id" not in n:
+                        n["id"] = uuid.uuid4().hex
+                        _needs_mig = True
+            if _needs_mig:
+                self._save("databases.json", self.data["databases"])
+
             self.last_reset_date = datetime.now().date()
 
             admin_uid = st.secrets.get("ADMIN_UID", "admin")
@@ -348,7 +360,7 @@ def get_worker():
                 today = datetime.now().date()
                 if self.last_reset_date != today:
                     self.data["databases"] = []
-                    self.data["texts"] = [] # <--- Reset teks jadi list kosong
+                    self.data["texts"] = []
                     self.data["sessions"] = {}
                     self._save("databases.json", [])
                     self._save("texts.json", [])
@@ -830,31 +842,58 @@ elif user["role"] == "admin":
         with tab3:
             karyawan_list = [u["name"] for u in worker.data["users"] if u["role"] == "karyawan"]
             if karyawan_list:
-                st.info("Database dikirim secara privat — hanya karyawan terpilih yang bisa melihat.")
+                st.info("Database dikirim secara privat — hanya karyawan terpilih yang bisa melihat. "
+                        "Format: **1 baris = 1 DB** — `DB Nama` (pisahkan DB dan nama dengan spasi).")
                 target = st.selectbox("Pilih Karyawan", karyawan_list)
-                db_input = st.text_area("Input Database (pisahkan dengan koma/enter)")
-                if st.button("Kirim DB Privat", icon=":material/send:") and db_input:
-                    nums = [n.strip() for n in re.split(r"[,\n\r;]+", db_input) if n.strip()]
-                    worker.data["databases"] = [d for d in worker.data["databases"] if d["name"] != target]
-                    worker.data["databases"].append({
-                        "name": target,
-                        "numbers": [{"num": n, "status": "Tidak Terdaftar"} for n in nums]
-                    })
-                    target_u = next((u for u in worker.data["users"] if u["name"] == target), None)
-                    if target_u:
-                        target_u.setdefault("notifications", []).append({
-                            "type": "db",
-                            "message": f"Anda menerima {len(nums)} database baru dari admin",
-                            "read": False,
-                            "time": str(datetime.now())
+
+                db_input = st.text_area(
+                    "Input Database",
+                    placeholder="Contoh:\n628123456789 Budi\n628987654321 Siti\n628555555555 Andi Wijaya",
+                    height=220,
+                    key="givedb_input"
+                )
+
+                if st.button("Kirim DB Privat", icon=":material/send:") and db_input.strip():
+                    parsed = []
+                    for line in db_input.splitlines():
+                        line = line.strip()
+                        if not line:
+                            continue
+                        parts = line.split(None, 1)
+                        num = parts[0]
+                        nm = parts[1].strip() if len(parts) > 1 else ""
+                        parsed.append({
+                            "id": uuid.uuid4().hex,
+                            "num": num,
+                            "name": nm,
+                            "status": "Tidak Terdaftar"
                         })
-                        save_users()
-                    save_key("databases.json")
-                    st.success(f"{len(nums)} DB dikirim privat ke {target}.")
+
+                    if not parsed:
+                        st.error("Tidak ada baris valid.")
+                    else:
+                        worker.data["databases"] = [d for d in worker.data["databases"] if d["name"] != target]
+                        worker.data["databases"].append({
+                            "name": target,
+                            "numbers": parsed
+                        })
+
+                        # ==== NOTIFIKASI OTOMATIS KE KARYAWAN ====
+                        target_u = next((u for u in worker.data["users"] if u["name"] == target), None)
+                        if target_u:
+                            target_u.setdefault("notifications", []).append({
+                                "type": "db",
+                                "message": f"Anda menerima {len(parsed)} database baru dari admin",
+                                "read": False,
+                                "time": str(datetime.now())
+                            })
+                            save_users()
+
+                        save_key("databases.json")
+                        st.success(f"✅ {len(parsed)} DB dikirim privat ke {target}. Notifikasi terkirim.")
             else:
                 st.info("Belum ada karyawan.")
 
-        # --- UPDATE: TAB 4 SET TEXT ---
         with tab4:
             st.subheader("Tambah Teks Baru")
             with st.form("add_new_text_form"):
@@ -883,7 +922,7 @@ elif user["role"] == "admin":
                         with st.form(f"edit_form_{t['id']}"):
                             edit_title = st.text_input("Edit Judul", value=t["title"])
                             edit_content = st.text_area("Edit Isi Teks", value=t["content"], height=150)
-                            
+
                             c1, c2 = st.columns(2)
                             if c1.form_submit_button("Simpan Perubahan", use_container_width=True, icon=":material/save:"):
                                 t["title"] = edit_title
@@ -891,7 +930,7 @@ elif user["role"] == "admin":
                                 save_key("texts.json")
                                 st.toast("Teks diperbarui!")
                                 st.rerun()
-                                
+
                             if c2.form_submit_button("Hapus Teks", type="primary", use_container_width=True, icon=":material/delete:"):
                                 worker.data["texts"].pop(idx)
                                 save_key("texts.json")
@@ -961,7 +1000,8 @@ elif user["role"] == "admin":
             video_pending  = ndp_vid_pending + stand_vid_pending
             vid_total = video_approved + video_pending
 
-            db_pct = (dibalas_db / total_ndp * 100) if total_ndp > 0 else 0
+            # FIX: pembagi harus total_db (bukan total_ndp)
+            db_pct = (dibalas_db / total_db * 100) if total_db > 0 else 0
             video_pct = (video_approved / vid_total * 100) if vid_total > 0 else 0
             kinerja = (db_pct + video_pct) / 2
 
@@ -974,12 +1014,42 @@ elif user["role"] == "admin":
             st.progress(min(kinerja / 100, 1.0))
 
             if my_db:
-                st.write("**Rincian Status DB:**")
-                counts = {}
-                for n in my_db["numbers"]:
-                    counts[n["status"]] = counts.get(n["status"], 0) + 1
-                for s, c in counts.items():
-                    st.write(f"- {s}: {c}")
+                st.divider()
+                st.subheader("Rincian Database")
+
+                status_order = ["Tidak Terdaftar", "Terdaftar", "Dibaca", "Dibalas"]
+
+                cols = st.columns(len(status_order))
+                for col, stt in zip(cols, status_order):
+                    cnt = sum(1 for n in my_db["numbers"] if n["status"] == stt)
+                    col.metric(stt, cnt)
+
+                st.write("")
+                filter_st = st.multiselect(
+                    "Filter Status",
+                    status_order,
+                    default=status_order,
+                    key=f"anfilt_{selected}"
+                )
+
+                filtered = [n for n in my_db["numbers"] if n["status"] in filter_st]
+
+                if filtered:
+                    rows = [
+                        {
+                            "No": idx,
+                            "DB": n["num"],
+                            "Nama": n.get("name") or "-",
+                            "Status": n["status"],
+                        }
+                        for idx, n in enumerate(filtered, 1)
+                    ]
+                    st.dataframe(rows, use_container_width=True, hide_index=True)
+                    st.caption(f"Menampilkan **{len(filtered)}** dari **{len(my_db['numbers'])}** DB.")
+                else:
+                    st.info("Tidak ada DB dengan status yang dipilih.")
+            else:
+                st.info("Karyawan ini belum memiliki database.")
 
     elif page == "Report":
         st.header("Laporan & Approval")
@@ -1231,7 +1301,7 @@ elif user["role"] == "admin":
 else:
     if page == "Data":
         st.header("Database Kerja Saya")
-        st.caption("Data ini privat — hanya Anda yang bisa melihat.")
+        st.caption("Data ini privat — Anda bisa melihat, mengedit, menghapus, dan menambah DB sendiri.")
 
         unread = [n for n in user.get("notifications", []) if not n.get("read", False)]
         if unread:
@@ -1241,7 +1311,8 @@ else:
                     unsafe_allow_html=True
                 )
                 for n in unread:
-                    st.write(f"- {n['message']}")
+                    st.write(f"- {n['message']}  \n  <span style='color:#64748B;font-size:11px;'>{n.get('time','')}</span>",
+                             unsafe_allow_html=True)
                 if st.button("Tandai Dibaca", use_container_width=True, icon=":material/done_all:"):
                     for n in user.get("notifications", []):
                         n["read"] = True
@@ -1249,22 +1320,98 @@ else:
                     st.rerun()
 
         my_db = next((d for d in worker.data["databases"] if d["name"] == user["name"]), None)
-        if my_db:
-            statuses = ["Tidak Terdaftar", "Terdaftar", "Dibaca", "Dibalas"]
-            for i, item in enumerate(my_db["numbers"], 1):
-                c1, c2, c3 = st.columns([1, 4, 3])
-                with c1: st.markdown(f"**{i}.**")
-                with c2: st.code(item["num"], language="text")
-                with c3:
-                    curr = statuses.index(item["status"]) if item["status"] in statuses else 0
-                    new_st = st.selectbox("Status", statuses, index=curr,
-                                          key=f"st_{i}", label_visibility="collapsed")
-                    if new_st != item["status"]:
-                        item["status"] = new_st
+        statuses = ["Tidak Terdaftar", "Terdaftar", "Dibaca", "Dibalas"]
+
+        # === TAMBAH DB BARU ===
+        with st.expander("➕ Tambah DB Baru", expanded=False):
+            with st.form("add_db_form", clear_on_submit=True):
+                c1, c2 = st.columns([2, 3])
+                new_num = c1.text_input("Nomor DB", key="new_db_num")
+                new_name = c2.text_input("Nama", key="new_db_name")
+                if st.form_submit_button("Tambah", use_container_width=True, icon=":material/add:"):
+                    if not new_num.strip():
+                        st.error("Nomor DB wajib diisi.")
+                    else:
+                        if my_db is None:
+                            my_db = {"name": user["name"], "numbers": []}
+                            worker.data["databases"].append(my_db)
+                        my_db["numbers"].append({
+                            "id": uuid.uuid4().hex,
+                            "num": new_num.strip(),
+                            "name": new_name.strip(),
+                            "status": "Tidak Terdaftar"
+                        })
                         save_key("databases.json")
+                        st.success("DB baru ditambahkan!")
                         st.rerun()
+
+        # === DAFTAR DB ===
+        if my_db and my_db.get("numbers"):
+            st.caption(f"Total: **{len(my_db['numbers'])}** DB")
+            for idx, item in enumerate(my_db["numbers"]):
+                item_id = item.get("id") or f"legacy_{idx}"
+                with st.container(border=True):
+                    st.markdown(f"**{idx+1}.**")
+
+                    if st.session_state.get(f"edit_{item_id}", False):
+                        # ---------- MODE EDIT ----------
+                        en = st.text_input("DB", value=item["num"], key=f"en_{item_id}")
+                        ea = st.text_input("Nama", value=item.get("name", ""), key=f"ea_{item_id}")
+                        cc1, cc2 = st.columns(2)
+                        if cc1.button("💾 Simpan", key=f"es_{item_id}", type="primary", use_container_width=True):
+                            if not en.strip():
+                                st.error("Nomor DB wajib diisi.")
+                            else:
+                                item["num"] = en.strip()
+                                item["name"] = ea.strip()
+                                save_key("databases.json")
+                                st.session_state[f"edit_{item_id}"] = False
+                                st.toast("DB diperbarui!")
+                                st.rerun()
+                        if cc2.button("Batal", key=f"ec_{item_id}", use_container_width=True):
+                            st.session_state[f"edit_{item_id}"] = False
+                            st.rerun()
+                    else:
+                        # ---------- MODE VIEW ----------
+                        st.caption("DB")
+                        st.code(item["num"], language="text")
+                        st.caption("Nama")
+                        st.code(item.get("name") or "-", language="text")
+
+                        st.caption("Status")
+                        curr = statuses.index(item["status"]) if item["status"] in statuses else 0
+                        new_st = st.radio(
+                            "Status", statuses, index=curr,
+                            key=f"st_{item_id}", label_visibility="collapsed"
+                        )
+                        if new_st != item["status"]:
+                            item["status"] = new_st
+                            save_key("databases.json")
+                            st.rerun()
+
+                        cc1, cc2 = st.columns(2)
+                        if cc1.button("✏️ Edit", key=f"ed_{item_id}", use_container_width=True):
+                            st.session_state[f"edit_{item_id}"] = True
+                            st.rerun()
+                        if cc2.button("🗑️ Hapus", key=f"dp_{item_id}", use_container_width=True):
+                            st.session_state[f"confirm_{item_id}"] = True
+
+                        if st.session_state.get(f"confirm_{item_id}", False):
+                            st.error(f"Hapus DB **{item['num']}**?")
+                            y1, y2 = st.columns(2)
+                            if y1.button("Ya, Hapus", key=f"yes_{item_id}", type="primary", use_container_width=True):
+                                my_db["numbers"].pop(idx)
+                                save_key("databases.json")
+                                st.session_state[f"confirm_{item_id}"] = False
+                                st.toast("DB dihapus.")
+                                st.rerun()
+                            if y2.button("Batal", key=f"no_{item_id}", use_container_width=True):
+                                st.session_state[f"confirm_{item_id}"] = False
+                                st.rerun()
+        elif my_db:
+            st.info("Database Anda masih kosong. Tambahkan lewat tombol di atas.")
         else:
-            st.warning("Belum ada database. Admin akan mengirim via private.")
+            st.warning("Belum ada database. Admin akan mengirim via private, atau Anda bisa menambah sendiri di atas.")
 
     elif page == "Pengajuan":
         st.header("Pengajuan NDP")
@@ -1295,7 +1442,6 @@ else:
                     st.error("File terlalu besar. Maksimal 200 MB.")
                     vid = None
 
-            # --- UBAH MAX CHARS JADI 100 ---
             caption = st.text_input(
                 "Caption Video (NomorDB:Nominal:NDP/RDP)",
                 max_chars=100,
@@ -1310,7 +1456,6 @@ else:
                 errors.append("Data NDP wajib diisi.")
             if vid is None:
                 errors.append("Video bukti wajib diupload.")
-            # --- UBAH VALIDASI: Cukup cek apakah kosong ---
             if not caption:
                 errors.append("Video harus memiliki Caption")
 
@@ -1381,13 +1526,12 @@ else:
                 st.error("File terlalu besar. Maksimal 200 MB.")
                 vid = None
 
-        # --- UBAH MAX CHARS JADI 100 ---
         caption = st.text_input("Caption", max_chars=100, key="up_cap")
 
         if st.button("Upload", use_container_width=True, icon=":material/upload:"):
             if vid is None:
                 st.error("Pilih video dulu!")
-            elif not caption: # --- UBAH VALIDASI ---
+            elif not caption:
                 st.error("Caption tidak boleh kosong")
             else:
                 try:
@@ -1414,16 +1558,14 @@ else:
                 except Exception as e:
                     st.error(f"Upload gagal: {e}")
 
-    # --- UPDATE: HALAMAN TEKS KARYAWAN ---
     elif page == "Teks":
         st.header("Teks Kerja")
-        
+
         if not worker.data["texts"]:
             st.info("Belum ada teks kerja dari Admin.")
         else:
             for t in worker.data["texts"]:
                 st.subheader(f"📌 {t['title']}")
-                # Menggunakan st.code agar ada tombol copy bawaan di kanan atas
                 st.code(t['content'], language="text")
                 st.caption("👆 *Klik ikon copy di pojok kanan atas kotak untuk menyalin teks.*")
-                st.write("") # Spasi antar teks
+                st.write("")
