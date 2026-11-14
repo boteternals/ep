@@ -1285,7 +1285,7 @@ else:
                 errors.append("Data NDP wajib diisi.")
             if vid is None:
                 errors.append("Video bukti wajib diupload.")
-            if not caption or not (1 <= len(caption) <= 10):
+            if not caption or not (1 <= len(caption) <= 30):
                 errors.append("Video harus memiliki Caption")
 
             if errors:
