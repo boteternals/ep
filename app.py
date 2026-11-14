@@ -1272,13 +1272,13 @@ else:
                     vid = None
 
             caption = st.text_input(
-                "Caption Video (1-10/11-20/dst)",
-                max_chars=10,
+                "Caption Video (NomorDB:Nominal:NDP/RDP)",
+                max_chars=50,
                 key="ndp_video_caption"
             )
 
         st.write("")
-        if st.button("Ajukan NDP + Video", use_container_width=True, type="primary",
+        if st.button("Ajukan", use_container_width=True, type="primary",
                      icon=":material/send:"):
             errors = []
             if not ndp_input.strip():
