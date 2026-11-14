@@ -199,7 +199,6 @@ st.markdown("""
 # ==========================================
 # COOKIE MANAGER (persist session)
 # ==========================================
-# PERBAIKAN: Hapus @st.cache_resource
 def get_cookie_manager():
     if not _HAS_COOKIES:
         return None
@@ -272,13 +271,25 @@ def get_worker():
             )
             self.bucket = bucket_name
             self.q = queue.Queue()
+            
+            # --- UPDATE: Struktur teks sekarang berupa list ---
+            texts_raw = self._load("texts.json", [])
+            if isinstance(texts_raw, dict) and "content" in texts_raw:
+                # Migrasi data lama (jika sebelumnya berupa dict) ke format list
+                old_content = texts_raw.get("content", "")
+                if old_content:
+                    texts_raw = [{"id": uuid.uuid4().hex, "title": "Teks Kerja Utama", "content": old_content}]
+                else:
+                    texts_raw = []
+                self._save("texts.json", texts_raw)
+
             self.data = {
                 "users": self._load("users.json", []),
                 "databases": self._load("databases.json", []),
-                "texts": self._load("texts.json", {"content": ""}),
+                "texts": texts_raw, # <--- Diperbarui
                 "payroll": self._load("payroll.json", {}),
                 "reports": self._load("reports.json", {"ndp": [], "wd": [], "video": []}),
-                "sessions": self._load("sessions.json", {})   # ⬅️ session persist
+                "sessions": self._load("sessions.json", {})
             }
             self.last_reset_date = datetime.now().date()
 
@@ -304,7 +315,6 @@ def get_worker():
                             self._save("users.json", self.data["users"])
                         break
 
-            # Bersihkan session expired saat startup
             self._cleanup_expired_sessions()
 
             self.thread = threading.Thread(target=self._process_queue, daemon=True)
@@ -338,11 +348,11 @@ def get_worker():
                 today = datetime.now().date()
                 if self.last_reset_date != today:
                     self.data["databases"] = []
-                    self.data["texts"] = {"content": ""}
-                    self.data["sessions"] = {}                     # ⬅️ reset session
+                    self.data["texts"] = [] # <--- Reset teks jadi list kosong
+                    self.data["sessions"] = {}
                     self._save("databases.json", [])
-                    self._save("texts.json", {"content": ""})
-                    self._save("sessions.json", {})                # ⬅️ reset session
+                    self._save("texts.json", [])
+                    self._save("sessions.json", {})
                     self.last_reset_date = today
                 try:
                     res = func(*args, **kwargs)
@@ -404,7 +414,6 @@ def get_worker():
             except Exception as e:
                 return f"ERROR: {e}"
 
-        # ===== SESSION (persist sampai 00:00) =====
         def _end_of_day_iso(self):
             now = datetime.now()
             eod = now.replace(hour=23, minute=59, second=59, microsecond=0)
@@ -506,33 +515,23 @@ def login_page():
                     st.error("Akun Anda telah dibanned oleh Admin.")
                 else:
                     st.session_state.user = u
-
-                    # Buat session persisten (valid sampai 00:00)
                     token = worker.create_session(u["uid"])
                     st.session_state.session_token = token
 
-                    # Set cookie di browser
                     if cookie_manager is not None:
                         try:
-                            eod = datetime.now().replace(
-                                hour=23, minute=59, second=59, microsecond=0
-                            )
+                            eod = datetime.now().replace(hour=23, minute=59, second=59, microsecond=0)
                             cookie_manager.set(
-                                "elang_session_token",
-                                token,
-                                expires_at=eod,
-                                key="set_cookie_login"
+                                "elang_session_token", token, expires_at=eod, key="set_cookie_login"
                             )
                         except Exception:
                             pass
-
                     st.rerun()
             else:
                 st.error("UID atau Password salah.")
 
 
 def try_restore_session():
-    """Coba pulihkan user dari token cookie yang tersimpan di browser."""
     if cookie_manager is None:
         return False
     try:
@@ -552,30 +551,22 @@ def try_restore_session():
     return True
 
 
-# ==========================================
-# 3b. SESSION FLOW (restore dari cookie)
-# ==========================================
-# Paksa rerun 1x agar cookie_manager sempat membaca cookie dari browser.
-# Hanya terjadi pada load pertama di sesi browser baru.
 if "cookie_loaded" not in st.session_state:
     st.session_state.cookie_loaded = True
     if cookie_manager is not None:
         try:
-            cookie_manager.get_all()  # trigger read
+            cookie_manager.get_all()
         except Exception:
             pass
         st.rerun()
 
-# Coba restore dari cookie kalau belum login
 if "user" not in st.session_state:
     try_restore_session()
 
-# Kalau masih belum login, tampilkan form login
 if "user" not in st.session_state:
     login_page()
     st.stop()
 
-# Refresh data user dari worker (data bisa berubah)
 user = next((u for u in worker.data["users"] if u["uid"] == st.session_state.user["uid"]), st.session_state.user)
 st.session_state.user = user
 
@@ -713,11 +704,9 @@ if page == "Akun":
                     st.rerun()
 
     if st.button("Keluar / Logout", use_container_width=True, icon=":material/logout:"):
-        # Hapus session di server
         token = st.session_state.get("session_token")
         worker.delete_session(token)
 
-        # Hapus cookie di browser
         if cookie_manager is not None:
             try:
                 cookie_manager.delete("elang_session_token", key="del_cookie_logout")
@@ -865,12 +854,50 @@ elif user["role"] == "admin":
             else:
                 st.info("Belum ada karyawan.")
 
+        # --- UPDATE: TAB 4 SET TEXT ---
         with tab4:
-            text_in = st.text_area("Teks Kerja Harian", value=worker.data["texts"].get("content", ""))
-            if st.button("Simpan Teks", icon=":material/save:"):
-                worker.data["texts"] = {"content": text_in}
-                save_key("texts.json")
-                st.success("Teks disimpan!")
+            st.subheader("Tambah Teks Baru")
+            with st.form("add_new_text_form"):
+                new_title = st.text_input("Nama / Judul Teks")
+                new_content = st.text_area("Isi Teks", height=150)
+                if st.form_submit_button("Tambah Teks", icon=":material/add:"):
+                    if new_title and new_content:
+                        worker.data["texts"].append({
+                            "id": uuid.uuid4().hex,
+                            "title": new_title,
+                            "content": new_content
+                        })
+                        save_key("texts.json")
+                        st.success("Teks berhasil ditambahkan!")
+                        st.rerun()
+                    else:
+                        st.error("Judul dan Isi Teks tidak boleh kosong.")
+
+            st.divider()
+            st.subheader("Daftar Teks Tersimpan")
+            if not worker.data["texts"]:
+                st.info("Belum ada teks yang tersimpan.")
+            else:
+                for idx, t in enumerate(worker.data["texts"]):
+                    with st.expander(f"📄 {t['title']}"):
+                        with st.form(f"edit_form_{t['id']}"):
+                            edit_title = st.text_input("Edit Judul", value=t["title"])
+                            edit_content = st.text_area("Edit Isi Teks", value=t["content"], height=150)
+                            
+                            c1, c2 = st.columns(2)
+                            if c1.form_submit_button("Simpan Perubahan", use_container_width=True, icon=":material/save:"):
+                                t["title"] = edit_title
+                                t["content"] = edit_content
+                                save_key("texts.json")
+                                st.toast("Teks diperbarui!")
+                                st.rerun()
+                                
+                            if c2.form_submit_button("Hapus Teks", type="primary", use_container_width=True, icon=":material/delete:"):
+                                worker.data["texts"].pop(idx)
+                                save_key("texts.json")
+                                st.toast("Teks dihapus!")
+                                st.rerun()
+
 
     elif page == "Payroll":
         st.header("Manajemen Payroll")
@@ -958,7 +985,6 @@ elif user["role"] == "admin":
         st.header("Laporan & Approval")
         tab_ndp, tab_wd, tab_video = st.tabs(["Cek NDP+Video", "Withdraw", "Video Standalone"])
 
-        # ===== TAB NDP + VIDEO =====
         with tab_ndp:
             ndps = worker.data["reports"]["ndp"]
             pending = [(i, n) for i, n in enumerate(ndps) if n.get("status", "pending") == "pending"]
@@ -1069,7 +1095,6 @@ elif user["role"] == "admin":
                             )
                     st.caption(f"Waktu: {n.get('time', '-')}")
 
-        # ===== TAB WITHDRAW =====
         with tab_wd:
             wds = worker.data["reports"]["wd"]
             pending_wd = [(i, n) for i, n in enumerate(wds) if n.get("status", "pending") == "pending"]
@@ -1092,7 +1117,6 @@ elif user["role"] == "admin":
                         save_key("reports.json")
                         st.rerun()
 
-        # ===== TAB VIDEO STANDALONE =====
         with tab_video:
             vids = worker.data["reports"]["video"]
             if not vids:
@@ -1271,21 +1295,23 @@ else:
                     st.error("File terlalu besar. Maksimal 200 MB.")
                     vid = None
 
+            # --- UBAH MAX CHARS JADI 100 ---
             caption = st.text_input(
                 "Caption Video (NomorDB:Nominal:NDP/RDP)",
-                max_chars=50,
+                max_chars=100,
                 key="ndp_video_caption"
             )
 
         st.write("")
-        if st.button("Ajukan", use_container_width=True, type="primary",
+        if st.button("Ajukan NDP + Video", use_container_width=True, type="primary",
                      icon=":material/send:"):
             errors = []
             if not ndp_input.strip():
                 errors.append("Data NDP wajib diisi.")
             if vid is None:
                 errors.append("Video bukti wajib diupload.")
-            if not caption or not (1 <= len(caption) <= 30):
+            # --- UBAH VALIDASI: Cukup cek apakah kosong ---
+            if not caption:
                 errors.append("Video harus memiliki Caption")
 
             if errors:
@@ -1355,13 +1381,14 @@ else:
                 st.error("File terlalu besar. Maksimal 200 MB.")
                 vid = None
 
-        caption = st.text_input("Caption", max_chars=10, key="up_cap")
+        # --- UBAH MAX CHARS JADI 100 ---
+        caption = st.text_input("Caption", max_chars=100, key="up_cap")
 
         if st.button("Upload", use_container_width=True, icon=":material/upload:"):
             if vid is None:
                 st.error("Pilih video dulu!")
-            elif not caption or not (1 <= len(caption) <= 10):
-                st.error("Contoh caption: 1-10")
+            elif not caption: # --- UBAH VALIDASI ---
+                st.error("Caption tidak boleh kosong")
             else:
                 try:
                     with st.spinner(f"Mengupload {size_mb} MB..."):
@@ -1387,9 +1414,16 @@ else:
                 except Exception as e:
                     st.error(f"Upload gagal: {e}")
 
+    # --- UPDATE: HALAMAN TEKS KARYAWAN ---
     elif page == "Teks":
         st.header("Teks Kerja")
-        text_content = worker.data["texts"].get("content", "Belum ada teks.")
-        st.code(text_content)
-        st.button("Copy Teks", icon=":material/content_copy:",
-                  on_click=lambda: st.toast("Teks disalin!"))
+        
+        if not worker.data["texts"]:
+            st.info("Belum ada teks kerja dari Admin.")
+        else:
+            for t in worker.data["texts"]:
+                st.subheader(f"📌 {t['title']}")
+                # Menggunakan st.code agar ada tombol copy bawaan di kanan atas
+                st.code(t['content'], language="text")
+                st.caption("👆 *Klik ikon copy di pojok kanan atas kotak untuk menyalin teks.*")
+                st.write("") # Spasi antar teks
