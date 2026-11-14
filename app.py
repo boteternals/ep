@@ -43,28 +43,31 @@ st.markdown("""
     h1, h2, h3, h4, h5, h6 { color: #E0F2FE !important; }
     .stMarkdown p, label { color: #CBD5E1; }
 
-    div[data-testid="stRadio"] {
+    /* =====================================================
+       NAV BAWAH — hanya berlaku untuk st.container(key="nav_bottom")
+       ===================================================== */
+    .st-key-nav_bottom div[data-testid="stRadio"] {
         position: fixed; bottom: 0; left: 0; right: 0;
         background: linear-gradient(180deg, #0B132B 0%, #020617 100%);
         padding: 12px 5px 16px 5px; z-index: 9999;
         border-top: 1px solid #1E3A8A;
         box-shadow: 0 -8px 25px rgba(30, 64, 175, 0.35);
     }
-    div[data-testid="stRadio"] > div {
+    .st-key-nav_bottom div[data-testid="stRadio"] > div {
         display: flex; flex-direction: row !important;
         justify-content: space-around; width: 100%; gap: 4px;
     }
-    div[data-testid="stRadio"] label {
+    .st-key-nav_bottom div[data-testid="stRadio"] label {
         flex: 1; text-align: center; margin: 0 !important;
         padding: 8px 4px 6px 4px !important; cursor: pointer;
         display: flex; flex-direction: column; align-items: center;
         position: relative; border-radius: 12px;
         transition: background 0.25s ease, transform 0.2s ease;
     }
-    div[data-testid="stRadio"] label:hover {
+    .st-key-nav_bottom div[data-testid="stRadio"] label:hover {
         background: rgba(56, 189, 248, 0.08); transform: translateY(-1px);
     }
-    div[data-testid="stRadio"] label::before {
+    .st-key-nav_bottom div[data-testid="stRadio"] label::before {
         content: ''; position: absolute; top: -1px; left: 50%;
         transform: translateX(-50%); width: 0; height: 3px;
         background: linear-gradient(90deg, #3B82F6, #38BDF8);
@@ -72,26 +75,31 @@ st.markdown("""
         transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         box-shadow: 0 0 10px #38BDF8;
     }
-    div[data-testid="stRadio"] label:has(input:checked)::before { width: 45%; }
-    div[data-testid="stRadio"] label > div:first-child { display: none !important; }
-    div[data-testid="stRadio"] label p {
+    .st-key-nav_bottom div[data-testid="stRadio"] label:has(input:checked)::before { width: 45%; }
+    .st-key-nav_bottom div[data-testid="stRadio"] label > div:first-child { display: none !important; }
+    .st-key-nav_bottom div[data-testid="stRadio"] label p {
         display: flex; flex-direction: column; align-items: center;
         justify-content: center; gap: 4px;
         font-size: 10px !important; color: #64748B !important;
         margin: 0 !important; font-weight: 600 !important;
         transition: color 0.25s ease; line-height: 1.2;
     }
-    div[data-testid="stRadio"] label img {
+    .st-key-nav_bottom div[data-testid="stRadio"] label img {
         width: 24px; height: 24px; margin: 0 !important;
         opacity: 0.6; transition: all 0.25s ease;
     }
-    div[data-testid="stRadio"] label:has(input:checked) p { color: #38BDF8 !important; }
-    div[data-testid="stRadio"] label:has(input:checked) img {
+    .st-key-nav_bottom div[data-testid="stRadio"] label:has(input:checked) p { color: #38BDF8 !important; }
+    .st-key-nav_bottom div[data-testid="stRadio"] label:has(input:checked) img {
         opacity: 1;
         filter: invert(63%) sepia(54%) saturate(3282%) hue-rotate(177deg) brightness(99%) contrast(95%);
         transform: scale(1.12);
     }
+    /* Sembunyikan label "Nav" (label_visibility=collapsed sudah handle, tapi ekstra aman) */
+    .st-key-nav_bottom div[data-testid="stRadio"] > label { display: none !important; }
 
+    /* =====================================================
+       UMUM
+       ===================================================== */
     .stButton > button {
         background: linear-gradient(135deg, #1E40AF 0%, #3B82F6 100%);
         border: 1px solid #2563EB; color: white !important;
@@ -591,38 +599,41 @@ st.markdown(
 
 
 # ==========================================
-# 4. ROUTING NAV BAWAH
+# 4. ROUTING NAV BAWAH  (WAJIB dibungkus container key="nav_bottom")
 # ==========================================
 def nav_icon(name, label):
     url = f"https://api.iconify.design/ph/{name}.svg?color=%238A99AD"
     return f"![icon]({url})\n{label}"
 
-if user["role"] == "admin":
-    menu_options = ["Employee", "Payroll", "Analytic", "Report", "Akun"]
-    page = st.radio(
-        "Nav", menu_options, horizontal=True, label_visibility="collapsed",
-        format_func=lambda x: {
-            "Employee": nav_icon("users-three", "Karyawan"),
-            "Payroll":  nav_icon("wallet", "Gaji"),
-            "Analytic": nav_icon("chart-line-up", "Analitik"),
-            "Report":   nav_icon("file-text", "Laporan"),
-            "Akun":     nav_icon("user", "Akun")
-        }[x]
-    )
-else:
-    unread_count = sum(1 for n in user.get("notifications", []) if not n.get("read", False))
-    data_label = f"Data ({unread_count})" if unread_count else "Data"
-    menu_options = ["Data", "Pengajuan", "Upload", "Teks", "Akun"]
-    page = st.radio(
-        "Nav", menu_options, horizontal=True, label_visibility="collapsed",
-        format_func=lambda x: {
-            "Data":      nav_icon("database", data_label),
-            "Pengajuan": nav_icon("file-plus", "NDP"),
-            "Upload":    nav_icon("upload-simple", "Upload"),
-            "Teks":      nav_icon("text-align-left", "Teks"),
-            "Akun":      nav_icon("user", "Akun")
-        }[x]
-    )
+with st.container(key="nav_bottom"):
+    if user["role"] == "admin":
+        menu_options = ["Employee", "Payroll", "Analytic", "Report", "Akun"]
+        page = st.radio(
+            "Nav", menu_options, horizontal=True, label_visibility="collapsed",
+            format_func=lambda x: {
+                "Employee": nav_icon("users-three", "Karyawan"),
+                "Payroll":  nav_icon("wallet", "Gaji"),
+                "Analytic": nav_icon("chart-line-up", "Analitik"),
+                "Report":   nav_icon("file-text", "Laporan"),
+                "Akun":     nav_icon("user", "Akun")
+            }[x],
+            key="nav_radio_admin"
+        )
+    else:
+        unread_count = sum(1 for n in user.get("notifications", []) if not n.get("read", False))
+        data_label = f"Data ({unread_count})" if unread_count else "Data"
+        menu_options = ["Data", "Pengajuan", "Upload", "Teks", "Akun"]
+        page = st.radio(
+            "Nav", menu_options, horizontal=True, label_visibility="collapsed",
+            format_func=lambda x: {
+                "Data":      nav_icon("database", data_label),
+                "Pengajuan": nav_icon("file-plus", "NDP"),
+                "Upload":    nav_icon("upload-simple", "Upload"),
+                "Teks":      nav_icon("text-align-left", "Teks"),
+                "Akun":      nav_icon("user", "Akun")
+            }[x],
+            key="nav_radio_karyawan"
+        )
 
 
 # ==========================================
@@ -1000,7 +1011,6 @@ elif user["role"] == "admin":
             video_pending  = ndp_vid_pending + stand_vid_pending
             vid_total = video_approved + video_pending
 
-            # FIX: pembagi harus total_db (bukan total_ndp)
             db_pct = (dibalas_db / total_db * 100) if total_db > 0 else 0
             video_pct = (video_approved / vid_total * 100) if vid_total > 0 else 0
             kinerja = (db_pct + video_pct) / 2
@@ -1301,7 +1311,7 @@ elif user["role"] == "admin":
 else:
     if page == "Data":
         st.header("Database Kerja Saya")
-        st.caption("Data ini privat — Anda bisa melihat, mengedit, menghapus, dan menambah DB sendiri.")
+        st.caption("Data ini privat — hanya Anda yang bisa melihat dan mengubah status.")
 
         unread = [n for n in user.get("notifications", []) if not n.get("read", False)]
         if unread:
@@ -1322,30 +1332,6 @@ else:
         my_db = next((d for d in worker.data["databases"] if d["name"] == user["name"]), None)
         statuses = ["Tidak Terdaftar", "Terdaftar", "Dibaca", "Dibalas"]
 
-        # === TAMBAH DB BARU ===
-        with st.expander("➕ Tambah DB Baru", expanded=False):
-            with st.form("add_db_form", clear_on_submit=True):
-                c1, c2 = st.columns([2, 3])
-                new_num = c1.text_input("Nomor DB", key="new_db_num")
-                new_name = c2.text_input("Nama", key="new_db_name")
-                if st.form_submit_button("Tambah", use_container_width=True, icon=":material/add:"):
-                    if not new_num.strip():
-                        st.error("Nomor DB wajib diisi.")
-                    else:
-                        if my_db is None:
-                            my_db = {"name": user["name"], "numbers": []}
-                            worker.data["databases"].append(my_db)
-                        my_db["numbers"].append({
-                            "id": uuid.uuid4().hex,
-                            "num": new_num.strip(),
-                            "name": new_name.strip(),
-                            "status": "Tidak Terdaftar"
-                        })
-                        save_key("databases.json")
-                        st.success("DB baru ditambahkan!")
-                        st.rerun()
-
-        # === DAFTAR DB ===
         if my_db and my_db.get("numbers"):
             st.caption(f"Total: **{len(my_db['numbers'])}** DB")
             for idx, item in enumerate(my_db["numbers"]):
@@ -1353,65 +1339,26 @@ else:
                 with st.container(border=True):
                     st.markdown(f"**{idx+1}.**")
 
-                    if st.session_state.get(f"edit_{item_id}", False):
-                        # ---------- MODE EDIT ----------
-                        en = st.text_input("DB", value=item["num"], key=f"en_{item_id}")
-                        ea = st.text_input("Nama", value=item.get("name", ""), key=f"ea_{item_id}")
-                        cc1, cc2 = st.columns(2)
-                        if cc1.button("💾 Simpan", key=f"es_{item_id}", type="primary", use_container_width=True):
-                            if not en.strip():
-                                st.error("Nomor DB wajib diisi.")
-                            else:
-                                item["num"] = en.strip()
-                                item["name"] = ea.strip()
-                                save_key("databases.json")
-                                st.session_state[f"edit_{item_id}"] = False
-                                st.toast("DB diperbarui!")
-                                st.rerun()
-                        if cc2.button("Batal", key=f"ec_{item_id}", use_container_width=True):
-                            st.session_state[f"edit_{item_id}"] = False
-                            st.rerun()
-                    else:
-                        # ---------- MODE VIEW ----------
-                        st.caption("DB")
-                        st.code(item["num"], language="text")
-                        st.caption("Nama")
-                        st.code(item.get("name") or "-", language="text")
+                    st.caption("DB")
+                    st.code(item["num"], language="text")
 
-                        st.caption("Status")
-                        curr = statuses.index(item["status"]) if item["status"] in statuses else 0
-                        new_st = st.radio(
-                            "Status", statuses, index=curr,
-                            key=f"st_{item_id}", label_visibility="collapsed"
-                        )
-                        if new_st != item["status"]:
-                            item["status"] = new_st
-                            save_key("databases.json")
-                            st.rerun()
+                    st.caption("Nama")
+                    st.code(item.get("name") or "-", language="text")
 
-                        cc1, cc2 = st.columns(2)
-                        if cc1.button("✏️ Edit", key=f"ed_{item_id}", use_container_width=True):
-                            st.session_state[f"edit_{item_id}"] = True
-                            st.rerun()
-                        if cc2.button("🗑️ Hapus", key=f"dp_{item_id}", use_container_width=True):
-                            st.session_state[f"confirm_{item_id}"] = True
-
-                        if st.session_state.get(f"confirm_{item_id}", False):
-                            st.error(f"Hapus DB **{item['num']}**?")
-                            y1, y2 = st.columns(2)
-                            if y1.button("Ya, Hapus", key=f"yes_{item_id}", type="primary", use_container_width=True):
-                                my_db["numbers"].pop(idx)
-                                save_key("databases.json")
-                                st.session_state[f"confirm_{item_id}"] = False
-                                st.toast("DB dihapus.")
-                                st.rerun()
-                            if y2.button("Batal", key=f"no_{item_id}", use_container_width=True):
-                                st.session_state[f"confirm_{item_id}"] = False
-                                st.rerun()
+                    st.caption("Status")
+                    curr = statuses.index(item["status"]) if item["status"] in statuses else 0
+                    new_st = st.radio(
+                        "Status", statuses, index=curr,
+                        key=f"st_{item_id}", label_visibility="collapsed"
+                    )
+                    if new_st != item["status"]:
+                        item["status"] = new_st
+                        save_key("databases.json")
+                        st.rerun()
         elif my_db:
-            st.info("Database Anda masih kosong. Tambahkan lewat tombol di atas.")
+            st.info("Database Anda masih kosong. Hubungi admin untuk pengiriman DB.")
         else:
-            st.warning("Belum ada database. Admin akan mengirim via private, atau Anda bisa menambah sendiri di atas.")
+            st.warning("Belum ada database. Admin akan mengirim via private.")
 
     elif page == "Pengajuan":
         st.header("Pengajuan NDP")
