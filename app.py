@@ -13,6 +13,14 @@ from datetime import datetime
 from botocore.exceptions import ClientError
 from botocore.client import Config
 
+# === COOKIE LIB (fallback aman kalau belum install) ===
+try:
+    import extra_streamlit_components as stx
+    _HAS_COOKIES = True
+except ImportError:
+    _HAS_COOKIES = False
+
+
 # ==========================================
 # 0. PAGE CONFIG & CSS (TEMA BIRU)
 # ==========================================
@@ -189,6 +197,18 @@ st.markdown("""
 
 
 # ==========================================
+# COOKIE MANAGER (persist session)
+# ==========================================
+@st.cache_resource
+def get_cookie_manager():
+    if not _HAS_COOKIES:
+        return None
+    return stx.CookieManager(key="elang_cookie_mgr")
+
+cookie_manager = get_cookie_manager()
+
+
+# ==========================================
 # SVG INLINE HELPER
 # ==========================================
 _SVG_PATHS = {
@@ -257,7 +277,8 @@ def get_worker():
                 "databases": self._load("databases.json", []),
                 "texts": self._load("texts.json", {"content": ""}),
                 "payroll": self._load("payroll.json", {}),
-                "reports": self._load("reports.json", {"ndp": [], "wd": [], "video": []})
+                "reports": self._load("reports.json", {"ndp": [], "wd": [], "video": []}),
+                "sessions": self._load("sessions.json", {})   # ⬅️ session persist
             }
             self.last_reset_date = datetime.now().date()
 
@@ -282,6 +303,9 @@ def get_worker():
                             u["pass_hash"] = self.hash_pwd(admin_pwd)
                             self._save("users.json", self.data["users"])
                         break
+
+            # Bersihkan session expired saat startup
+            self._cleanup_expired_sessions()
 
             self.thread = threading.Thread(target=self._process_queue, daemon=True)
             self.thread.start()
@@ -315,8 +339,10 @@ def get_worker():
                 if self.last_reset_date != today:
                     self.data["databases"] = []
                     self.data["texts"] = {"content": ""}
+                    self.data["sessions"] = {}                     # ⬅️ reset session
                     self._save("databases.json", [])
                     self._save("texts.json", {"content": ""})
+                    self._save("sessions.json", {})                # ⬅️ reset session
                     self.last_reset_date = today
                 try:
                     res = func(*args, **kwargs)
@@ -378,6 +404,49 @@ def get_worker():
             except Exception as e:
                 return f"ERROR: {e}"
 
+        # ===== SESSION (persist sampai 00:00) =====
+        def _end_of_day_iso(self):
+            now = datetime.now()
+            eod = now.replace(hour=23, minute=59, second=59, microsecond=0)
+            return eod.isoformat()
+
+        def _cleanup_expired_sessions(self):
+            now_iso = datetime.now().isoformat()
+            expired = [t for t, s in self.data["sessions"].items()
+                       if s.get("expires", "") < now_iso]
+            if expired:
+                for t in expired:
+                    del self.data["sessions"][t]
+                self._save("sessions.json", self.data["sessions"])
+
+        def create_session(self, uid):
+            self._cleanup_expired_sessions()
+            token = uuid.uuid4().hex
+            self.data["sessions"][token] = {
+                "uid": uid,
+                "created": datetime.now().isoformat(),
+                "expires": self._end_of_day_iso()
+            }
+            self._save("sessions.json", self.data["sessions"])
+            return token
+
+        def validate_session(self, token):
+            if not token:
+                return None
+            sess = self.data["sessions"].get(token)
+            if not sess:
+                return None
+            if datetime.now().isoformat() > sess.get("expires", ""):
+                del self.data["sessions"][token]
+                self._save("sessions.json", self.data["sessions"])
+                return None
+            return sess.get("uid")
+
+        def delete_session(self, token):
+            if token and token in self.data["sessions"]:
+                del self.data["sessions"][token]
+                self._save("sessions.json", self.data["sessions"])
+
     return S3Worker()
 
 worker = get_worker()
@@ -424,6 +493,7 @@ def login_page():
         unsafe_allow_html=True
     )
     st.markdown("<h2 style='text-align: center; color: #38BDF8;'>ElangPintar</h2>", unsafe_allow_html=True)
+    st.caption("Login akan bertahan hingga akhir hari (00:00).")
     st.write("")
     with st.form("login_form"):
         uid = st.text_input("UID (16 Digit)")
@@ -436,14 +506,76 @@ def login_page():
                     st.error("Akun Anda telah dibanned oleh Admin.")
                 else:
                     st.session_state.user = u
+
+                    # Buat session persisten (valid sampai 00:00)
+                    token = worker.create_session(u["uid"])
+                    st.session_state.session_token = token
+
+                    # Set cookie di browser
+                    if cookie_manager is not None:
+                        try:
+                            eod = datetime.now().replace(
+                                hour=23, minute=59, second=59, microsecond=0
+                            )
+                            cookie_manager.set(
+                                "elang_session_token",
+                                token,
+                                expires_at=eod,
+                                key="set_cookie_login"
+                            )
+                        except Exception:
+                            pass
+
                     st.rerun()
             else:
                 st.error("UID atau Password salah.")
 
+
+def try_restore_session():
+    """Coba pulihkan user dari token cookie yang tersimpan di browser."""
+    if cookie_manager is None:
+        return False
+    try:
+        token = cookie_manager.get("elang_session_token")
+    except Exception:
+        return False
+    if not token:
+        return False
+    uid = worker.validate_session(token)
+    if not uid:
+        return False
+    u = next((x for x in worker.data["users"] if x["uid"] == uid), None)
+    if not u or u.get("banned"):
+        return False
+    st.session_state.user = u
+    st.session_state.session_token = token
+    return True
+
+
+# ==========================================
+# 3b. SESSION FLOW (restore dari cookie)
+# ==========================================
+# Paksa rerun 1x agar cookie_manager sempat membaca cookie dari browser.
+# Hanya terjadi pada load pertama di sesi browser baru.
+if "cookie_loaded" not in st.session_state:
+    st.session_state.cookie_loaded = True
+    if cookie_manager is not None:
+        try:
+            cookie_manager.get_all()  # trigger read
+        except Exception:
+            pass
+        st.rerun()
+
+# Coba restore dari cookie kalau belum login
+if "user" not in st.session_state:
+    try_restore_session()
+
+# Kalau masih belum login, tampilkan form login
 if "user" not in st.session_state:
     login_page()
     st.stop()
 
+# Refresh data user dari worker (data bisa berubah)
 user = next((u for u in worker.data["users"] if u["uid"] == st.session_state.user["uid"]), st.session_state.user)
 st.session_state.user = user
 
@@ -581,7 +713,19 @@ if page == "Akun":
                     st.rerun()
 
     if st.button("Keluar / Logout", use_container_width=True, icon=":material/logout:"):
-        del st.session_state.user
+        # Hapus session di server
+        token = st.session_state.get("session_token")
+        worker.delete_session(token)
+
+        # Hapus cookie di browser
+        if cookie_manager is not None:
+            try:
+                cookie_manager.delete("elang_session_token", key="del_cookie_logout")
+            except Exception:
+                pass
+
+        st.session_state.pop("user", None)
+        st.session_state.pop("session_token", None)
         st.rerun()
 
     if st.session_state.get("show_withdraw", False):
@@ -769,7 +913,6 @@ elif user["role"] == "admin":
             else:
                 total_db = done_db = dibalas_db = 0
 
-            # === HITUNG VIDEO: gabungan NDP video + standalone upload video ===
             ndp_vid_approved = sum(
                 1 for n in worker.data["reports"]["ndp"]
                 if n["user"] == selected and n.get("status") == "approved" and n.get("video_key")
@@ -813,7 +956,6 @@ elif user["role"] == "admin":
 
     elif page == "Report":
         st.header("Laporan & Approval")
-        # === TAB: Cek NDP + Video, Withdraw, Video Standalone ===
         tab_ndp, tab_wd, tab_video = st.tabs(["Cek NDP+Video", "Withdraw", "Video Standalone"])
 
         # ===== TAB NDP + VIDEO =====
@@ -950,7 +1092,7 @@ elif user["role"] == "admin":
                         save_key("reports.json")
                         st.rerun()
 
-        # ===== TAB VIDEO STANDALONE (dari menu Upload) =====
+        # ===== TAB VIDEO STANDALONE =====
         with tab_video:
             vids = worker.data["reports"]["video"]
             if not vids:
@@ -1065,7 +1207,7 @@ elif user["role"] == "admin":
 else:
     if page == "Data":
         st.header("Database Kerja Saya")
-        st.caption("Data ini privat — hanya Anda yang bisa melihat.")
+        st.caption("Database akan dibagikan")
 
         unread = [n for n in user.get("notifications", []) if not n.get("read", False)]
         if unread:
@@ -1100,7 +1242,6 @@ else:
         else:
             st.warning("Belum ada database. Admin akan mengirim via private.")
 
-    # ===== MENU NDP (PENGAJUAN) — SEKARANG WAJIB + VIDEO =====
     elif page == "Pengajuan":
         st.header("Pengajuan NDP")
         st.caption("Setiap pengajuan NDP **wajib disertai video bukti**.")
@@ -1131,8 +1272,8 @@ else:
                     vid = None
 
             caption = st.text_input(
-                "Caption Video (1-10/11-20/dst)",
-                max_chars=10,
+                "Caption Video (NomorDB:Nominal:NDP/RDP)",
+                max_chars=50,
                 key="ndp_video_caption"
             )
 
@@ -1178,7 +1319,6 @@ else:
                 except Exception as e:
                     st.error(f"Gagal upload: {e}")
 
-        # Riwayat singkat
         st.divider()
         st.subheader("Riwayat Pengajuan Saya")
         my_ndps = [(i, n) for i, n in enumerate(worker.data["reports"]["ndp"])
@@ -1202,7 +1342,6 @@ else:
                         st.caption(f"Caption: **{n.get('video_caption','-')}** · {n.get('video_size_mb','-')} MB")
                     st.caption(f"Waktu: {n.get('time', '-')}")
 
-    # ===== MENU UPLOAD (VIDEO STANDALONE / UMUM) =====
     elif page == "Upload":
         st.header("Upload Video")
         st.caption("Gunakan menu ini untuk upload video di luar pengajuan NDP.")
