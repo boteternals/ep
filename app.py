@@ -544,7 +544,7 @@ if page == "Akun":
 
     st.markdown(f"""
     <div class="wallet-card">
-        <div class="wallet-header">{svg('package', 18)}<span>Dompet Kucing</span></div>
+        <div class="wallet-header">{svg('package', 18)}<span>Dompet Elang</span></div>
         <div class="wallet-balance">{fmt_rp(my_payroll)}</div>
         <div class="wallet-footer">
             <span>Tersedia: <b>{fmt_rp(available)}</b></span>
