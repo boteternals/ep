@@ -255,8 +255,8 @@ def svg_html(name, text, size=16, color="#38BDF8"):
 @st.cache_resource
 def get_worker():
     class S3Worker:
+        # Catbox anonim: tanpa userhash
         CATBOX_API = "https://catbox.moe/user/api.php"
-        CATBOX_USERHASH = st.secrets.get("CATBOX_USERHASH", "")
 
         def __init__(self):
             raw_bucket = st.secrets.get("S3_BUCKET_NAME", "SatyaDev13/ElangP")
@@ -376,12 +376,12 @@ def get_worker():
             self.s3.put_object(Bucket=self.bucket, Key=f"uploads/{filename}", Body=file_bytes)
             return True
 
-        # ===== CATBOX.MOE =====
+        # ===== CATBOX.MOE (anonim, tanpa userhash) =====
         def upload_video_catbox(self, file_bytes, filename):
             try:
                 r = requests.post(
                     self.CATBOX_API,
-                    data={"reqtype": "fileupload", "userhash": self.CATBOX_USERHASH},
+                    data={"reqtype": "fileupload"},
                     files={"fileToUpload": (filename, file_bytes)},
                     timeout=180
                 )
@@ -393,20 +393,8 @@ def get_worker():
                 return f"ERROR: {e}"
 
         def delete_video_catbox(self, url):
-            try:
-                filename = url.rstrip("/").split("/")[-1]
-                r = requests.post(
-                    self.CATBOX_API,
-                    data={
-                        "reqtype": "deletefiles",
-                        "userhash": self.CATBOX_USERHASH,
-                        "files": filename
-                    },
-                    timeout=30
-                )
-                return r.text.strip()
-            except Exception as e:
-                return f"ERROR: {e}"
+            # Upload anonim tidak bisa dihapus dari Catbox
+            return "SKIP"
 
     return S3Worker()
 
@@ -966,16 +954,15 @@ elif user["role"] == "admin":
                             st.session_state[f"cd_{idx}"] = True
 
                         if st.session_state.get(f"cd_{idx}", False):
-                            st.error(f"Hapus permanen video **{v.get('caption','-')}**?")
+                            st.error(f"Hapus video **{v.get('caption','-')}** dari database?")
+                            st.caption("File di Catbox tetap ada (upload anonim tidak bisa dihapus).")
                             y1, y2 = st.columns(2)
                             if y1.button("Ya, Hapus", key=f"y_{idx}",
                                          type="primary", use_container_width=True):
-                                if v.get("url"):
-                                    worker.execute(worker.delete_video_catbox, v["url"])
                                 vids.pop(idx)
                                 save_key("reports.json")
                                 st.session_state[f"cd_{idx}"] = False
-                                st.success("Video dihapus dari Catbox & database.")
+                                st.success("Video dihapus dari database.")
                                 st.rerun()
                             if y2.button("Batal", key=f"n_{idx}",
                                          use_container_width=True):
@@ -1116,3 +1103,4 @@ else:
         st.code(text_content)
         st.button("Copy Teks", icon=":material/content_copy:",
                   on_click=lambda: st.toast("Teks disalin!"))
+
