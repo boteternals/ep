@@ -199,7 +199,7 @@ st.markdown("""
 # ==========================================
 # COOKIE MANAGER (persist session)
 # ==========================================
-@st.cache_resource
+# PERBAIKAN: Hapus @st.cache_resource
 def get_cookie_manager():
     if not _HAS_COOKIES:
         return None
@@ -1207,7 +1207,7 @@ elif user["role"] == "admin":
 else:
     if page == "Data":
         st.header("Database Kerja Saya")
-        st.caption("Database akan dibagikan")
+        st.caption("Data ini privat — hanya Anda yang bisa melihat.")
 
         unread = [n for n in user.get("notifications", []) if not n.get("read", False)]
         if unread:
@@ -1272,8 +1272,8 @@ else:
                     vid = None
 
             caption = st.text_input(
-                "Caption Video (NomorDB:Nominal:NDP/RDP)",
-                max_chars=50,
+                "Caption Video (1-10/11-20/dst)",
+                max_chars=10,
                 key="ndp_video_caption"
             )
 
