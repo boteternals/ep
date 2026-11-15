@@ -8,8 +8,23 @@ import threading
 import random
 import re
 import mimetypes
-import requests
-from datetime import datetime
+import copy
+import html
+from datetime import datetime, timedelta, timezone
+try:
+    from zoneinfo import ZoneInfo
+    WIB = ZoneInfo("Asia/Jakarta")
+except Exception:
+    WIB = timezone(timedelta(hours=7))
+
+def now_wib_aware():
+    return datetime.now(WIB)
+
+def now_wib():
+    return now_wib_aware().replace(tzinfo=None)
+
+def today_wib_str():
+    return now_wib().date().isoformat()
 from botocore.exceptions import ClientError
 from botocore.client import Config
 
@@ -271,14 +286,25 @@ def get_worker():
             else:
                 endpoint_url = raw_endpoint
 
+            try:
+                s3_cfg = Config(
+                    s3={"addressing_style": "path"},
+                    signature_version="s3v4",
+                    request_checksum_calculation="when_required",
+                    response_checksum_validation="when_required",
+                )
+            except TypeError:
+                s3_cfg = Config(s3={"addressing_style": "path"}, signature_version="s3v4")
+
             self.s3 = boto3.client(
                 "s3", endpoint_url=endpoint_url,
                 aws_access_key_id=st.secrets["S3_ACCESS_KEY_ID"],
                 aws_secret_access_key=st.secrets["S3_SECRET_ACCESS_KEY"],
-                config=Config(s3={"addressing_style": "path"}, signature_version="s3v4")
+                config=s3_cfg
             )
             self.bucket = bucket_name
             self.q = queue.Queue()
+            self.lock = threading.Lock()
 
             texts_raw = self._load("texts.json", [])
             if isinstance(texts_raw, dict) and "content" in texts_raw:
@@ -289,13 +315,19 @@ def get_worker():
                     texts_raw = []
                 self._save("texts.json", texts_raw)
 
+            meta_raw = self._load("meta.json", {"last_reset_date": today_wib_str()})
+            if not isinstance(meta_raw, dict):
+                meta_raw = {"last_reset_date": today_wib_str()}
+
             self.data = {
                 "users": self._load("users.json", []),
                 "databases": self._load("databases.json", []),
                 "texts": texts_raw,
                 "payroll": self._load("payroll.json", {}),
                 "reports": self._load("reports.json", {"ndp": [], "wd": [], "video": []}),
-                "sessions": self._load("sessions.json", {})
+                "sessions": self._load("sessions.json", {}),
+                "db_stats": self._load("db_stats.json", {}),
+                "meta": meta_raw,
             }
 
             # --- MIGRASI: pastikan setiap item DB punya 'name' & 'id' unik ---
@@ -311,7 +343,7 @@ def get_worker():
             if _needs_mig:
                 self._save("databases.json", self.data["databases"])
 
-            self.last_reset_date = datetime.now().date()
+            self.last_reset_date = self.data["meta"].get("last_reset_date") or today_wib_str()
 
             admin_uid = st.secrets.get("ADMIN_UID", "admin")
             admin_pwd = st.secrets.get("ADMIN_PASSWORD", "admin123")
@@ -335,6 +367,7 @@ def get_worker():
                             self._save("users.json", self.data["users"])
                         break
 
+            self.ensure_daily_reset()
             self._cleanup_expired_sessions()
 
             self.thread = threading.Thread(target=self._process_queue, daemon=True)
@@ -360,21 +393,34 @@ def get_worker():
                 ContentType="application/json"
             )
 
+        def ensure_daily_reset(self):
+            today_str = today_wib_str()
+            if self.last_reset_date == today_str:
+                return False
+            with self.lock:
+                today_str = today_wib_str()
+                if self.last_reset_date == today_str:
+                    return False
+                self.data["databases"] = []
+                self.data["texts"] = []
+                self.data["sessions"] = {}
+                self.data["db_stats"] = {}
+                self.data["meta"] = {"last_reset_date": today_str}
+                self._save("databases.json", [])
+                self._save("texts.json", [])
+                self._save("sessions.json", {})
+                self._save("db_stats.json", {})
+                self._save("meta.json", self.data["meta"])
+                self.last_reset_date = today_str
+                return True
+
         def _process_queue(self):
             while True:
                 task = self.q.get()
                 if task is None: break
                 func, args, kwargs, result_queue = task
-                today = datetime.now().date()
-                if self.last_reset_date != today:
-                    self.data["databases"] = []
-                    self.data["texts"] = []
-                    self.data["sessions"] = {}
-                    self._save("databases.json", [])
-                    self._save("texts.json", [])
-                    self._save("sessions.json", {})
-                    self.last_reset_date = today
                 try:
+                    self.ensure_daily_reset()
                     res = func(*args, **kwargs)
                     if result_queue is not None:
                         result_queue.put(res)
@@ -394,25 +440,35 @@ def get_worker():
             self.q.put((func, args, kwargs, None))
 
         def save_file(self, key, data):
-            self.data[key.replace(".json", "")] = data
-            self._save(key, data)
+            with self.lock:
+                self.data[key.replace(".json", "")] = data
+                self._save(key, data)
             return True
 
         def upload_file_s3(self, file_bytes, filename):
             self.s3.put_object(Bucket=self.bucket, Key=f"uploads/{filename}", Body=file_bytes)
             return True
 
-        def upload_video_s3(self, file_bytes, filename):
+        def upload_video_s3(self, file_obj_or_bytes, filename):
             try:
-                if not file_bytes:
+                if file_obj_or_bytes is None:
                     return "ERROR: File kosong."
                 safe = re.sub(r"[^A-Za-z0-9._-]", "_", filename)
                 key = f"videos/{safe}"
                 mime_type = mimetypes.guess_type(filename)[0] or "video/mp4"
-                self.s3.put_object(
-                    Bucket=self.bucket, Key=key,
-                    Body=bytes(file_bytes), ContentType=mime_type
-                )
+                if hasattr(file_obj_or_bytes, "read"):
+                    file_obj_or_bytes.seek(0)
+                    self.s3.upload_fileobj(
+                        file_obj_or_bytes, self.bucket, key,
+                        ExtraArgs={"ContentType": mime_type}
+                    )
+                else:
+                    if not file_obj_or_bytes:
+                        return "ERROR: File kosong."
+                    self.s3.put_object(
+                        Bucket=self.bucket, Key=key,
+                        Body=file_obj_or_bytes, ContentType=mime_type
+                    )
                 return key
             except Exception as e:
                 return f"ERROR: {type(e).__name__}: {e}"
@@ -435,50 +491,57 @@ def get_worker():
                 return f"ERROR: {e}"
 
         def _end_of_day_iso(self):
-            now = datetime.now()
+            now = now_wib()
             eod = now.replace(hour=23, minute=59, second=59, microsecond=0)
             return eod.isoformat()
 
         def _cleanup_expired_sessions(self):
-            now_iso = datetime.now().isoformat()
-            expired = [t for t, s in self.data["sessions"].items()
-                       if s.get("expires", "") < now_iso]
-            if expired:
-                for t in expired:
-                    del self.data["sessions"][t]
-                self._save("sessions.json", self.data["sessions"])
+            with self.lock:
+                now_iso = now_wib().isoformat()
+                expired = [t for t, s in self.data["sessions"].items()
+                           if s.get("expires", "") < now_iso]
+                if expired:
+                    for t in expired:
+                        del self.data["sessions"][t]
+                    self._save("sessions.json", self.data["sessions"])
 
         def create_session(self, uid):
             self._cleanup_expired_sessions()
-            token = uuid.uuid4().hex
-            self.data["sessions"][token] = {
-                "uid": uid,
-                "created": datetime.now().isoformat(),
-                "expires": self._end_of_day_iso()
-            }
-            self._save("sessions.json", self.data["sessions"])
-            return token
+            with self.lock:
+                token = uuid.uuid4().hex
+                self.data["sessions"][token] = {
+                    "uid": uid,
+                    "created": now_wib().isoformat(),
+                    "expires": self._end_of_day_iso()
+                }
+                self._save("sessions.json", self.data["sessions"])
+                return token
 
         def validate_session(self, token):
             if not token:
                 return None
-            sess = self.data["sessions"].get(token)
-            if not sess:
-                return None
-            if datetime.now().isoformat() > sess.get("expires", ""):
-                del self.data["sessions"][token]
-                self._save("sessions.json", self.data["sessions"])
-                return None
-            return sess.get("uid")
+            with self.lock:
+                sess = self.data["sessions"].get(token)
+                if not sess:
+                    return None
+                if now_wib().isoformat() > sess.get("expires", ""):
+                    del self.data["sessions"][token]
+                    self._save("sessions.json", self.data["sessions"])
+                    return None
+                return sess.get("uid")
 
         def delete_session(self, token):
-            if token and token in self.data["sessions"]:
-                del self.data["sessions"][token]
-                self._save("sessions.json", self.data["sessions"])
+            if not token:
+                return
+            with self.lock:
+                if token in self.data["sessions"]:
+                    del self.data["sessions"][token]
+                    self._save("sessions.json", self.data["sessions"])
 
     return S3Worker()
 
 worker = get_worker()
+worker.ensure_daily_reset()
 
 
 # ==========================================
@@ -505,15 +568,104 @@ def fmt_rp(n):
         return f"Rp {n}"
 
 def save_users():
-    worker.execute_async(worker.save_file, "users.json", worker.data["users"])
+    worker.execute_async(worker.save_file, "users.json", copy.deepcopy(worker.data["users"]))
+
+def save_users_sync():
+    worker.execute(worker.save_file, "users.json", copy.deepcopy(worker.data["users"]))
 
 def save_key(key):
-    worker.execute_async(worker.save_file, key, worker.data[key.replace(".json", "")])
+    worker.execute_async(worker.save_file, key, copy.deepcopy(worker.data[key.replace(".json", "")]))
+
+def save_key_sync(key):
+    worker.execute(worker.save_file, key, copy.deepcopy(worker.data[key.replace(".json", "")]))
+
+def archive_db_items(emp_name, items):
+    if not items:
+        return
+    stats = worker.data["db_stats"].setdefault(emp_name, {
+        "total": 0,
+        "done": 0,
+        "dibalas": 0,
+        "counts": {
+            "Tidak Terdaftar": 0,
+            "Terdaftar": 0,
+            "Dibaca": 0,
+            "Dibalas": 0,
+        }
+    })
+    stats.setdefault("counts", {})
+    for n in items:
+        stt = n.get("status", "Tidak Terdaftar")
+        stats["total"] = stats.get("total", 0) + 1
+        if stt != "Tidak Terdaftar":
+            stats["done"] = stats.get("done", 0) + 1
+        if stt == "Dibalas":
+            stats["dibalas"] = stats.get("dibalas", 0) + 1
+        stats["counts"][stt] = stats["counts"].get(stt, 0) + 1
+
+def revoke_employee_db(emp_name, item_ids=None, keep_stats=True, notify=True):
+    my_db = next((d for d in worker.data["databases"] if d["name"] == emp_name), None)
+    if not my_db or not my_db.get("numbers"):
+        return 0
+    numbers = my_db["numbers"]
+    if item_ids is None:
+        revoked = list(numbers)
+        remaining = []
+    else:
+        id_set = set(item_ids)
+        revoked = [n for n in numbers if n.get("id") in id_set]
+        remaining = [n for n in numbers if n.get("id") not in id_set]
+
+    if not revoked:
+        return 0
+
+    if keep_stats:
+        archive_db_items(emp_name, revoked)
+        save_key_sync("db_stats.json")
+
+    if remaining:
+        my_db["numbers"] = remaining
+    else:
+        worker.data["databases"] = [d for d in worker.data["databases"] if d["name"] != emp_name]
+    save_key_sync("databases.json")
+
+    if notify:
+        target_u = next((u for u in worker.data["users"] if u["name"] == emp_name), None)
+        if target_u:
+            ket = "statistik tetap dipertahankan" if keep_stats else "statistik direset sesuai pencabutan"
+            target_u.setdefault("notifications", []).append({
+                "type": "db_revoke",
+                "message": f"{len(revoked)} database Anda ditarik/dicabut oleh admin ({ket}).",
+                "read": False,
+                "time": str(now_wib())
+            })
+            save_users_sync()
+    return len(revoked)
 
 
 # ==========================================
 # 3. AUTENTIKASI
 # ==========================================
+def read_session_cookie(cookie_tokens):
+    tok = None
+    if isinstance(cookie_tokens, dict):
+        tok = cookie_tokens.get("elang_session_token")
+    if not tok:
+        try:
+            tok = st.context.cookies.get("elang_session_token")
+        except Exception:
+            tok = None
+    return tok
+
+
+cookie_tokens = {}
+if cookie_manager is not None:
+    try:
+        cookie_tokens = cookie_manager.get_all() or {}
+    except Exception:
+        cookie_tokens = {}
+
+
 def login_page():
     st.markdown(
         "<div style='text-align: center; margin-bottom: 10px; "
@@ -522,7 +674,7 @@ def login_page():
         unsafe_allow_html=True
     )
     st.markdown("<h2 style='text-align: center; color: #38BDF8;'>ElangPintar</h2>", unsafe_allow_html=True)
-    st.caption("Login akan bertahan hingga akhir hari (00:00).")
+    st.caption("Login akan bertahan hingga akhir hari (00:00 WIB).")
     st.write("")
     with st.form("login_form"):
         uid = st.text_input("UID (16 Digit)")
@@ -537,27 +689,18 @@ def login_page():
                     st.session_state.user = u
                     token = worker.create_session(u["uid"])
                     st.session_state.session_token = token
-
-                    if cookie_manager is not None:
-                        try:
-                            eod = datetime.now().replace(hour=23, minute=59, second=59, microsecond=0)
-                            cookie_manager.set(
-                                "elang_session_token", token, expires_at=eod, key="set_cookie_login"
-                            )
-                        except Exception:
-                            pass
+                    st.session_state["_pending_cookie_set"] = token
+                    st.session_state["_cookie_set_tries"] = 0
+                    st.session_state.pop("_pending_cookie_delete", None)
                     st.rerun()
             else:
                 st.error("UID atau Password salah.")
 
 
-def try_restore_session():
-    if cookie_manager is None:
+def try_restore_session(tokens_dict):
+    if st.session_state.get("_pending_cookie_delete"):
         return False
-    try:
-        token = cookie_manager.get("elang_session_token")
-    except Exception:
-        return False
+    token = read_session_cookie(tokens_dict)
     if not token:
         return False
     uid = worker.validate_session(token)
@@ -571,21 +714,59 @@ def try_restore_session():
     return True
 
 
-if "cookie_loaded" not in st.session_state:
-    st.session_state.cookie_loaded = True
-    if cookie_manager is not None:
+# Sinkronkan hapus cookie saat logout tanpa terpotong st.rerun()
+if st.session_state.get("_pending_cookie_delete"):
+    existing_tok = read_session_cookie(cookie_tokens)
+    tries = st.session_state.get("_cookie_del_tries", 0)
+    if cookie_manager is not None and existing_tok and tries < 3:
         try:
-            cookie_manager.get_all()
+            cookie_manager.delete("elang_session_token", key="del_cookie_logout")
         except Exception:
             pass
-        st.rerun()
+        st.session_state["_cookie_del_tries"] = tries + 1
+    else:
+        st.session_state.pop("_pending_cookie_delete", None)
+        st.session_state.pop("_cookie_del_tries", None)
 
 if "user" not in st.session_state:
-    try_restore_session()
+    try_restore_session(cookie_tokens)
 
 if "user" not in st.session_state:
     login_page()
     st.stop()
+
+# Sinkronkan simpan cookie setelah login tanpa terpotong st.rerun()
+_pending_tok = st.session_state.get("_pending_cookie_set")
+if _pending_tok:
+    if cookie_tokens.get("elang_session_token") == _pending_tok:
+        st.session_state.pop("_pending_cookie_set", None)
+        st.session_state.pop("_cookie_set_tries", None)
+    else:
+        tries = st.session_state.get("_cookie_set_tries", 0)
+        if cookie_manager is not None and tries < 3:
+            try:
+                eod_aware = now_wib_aware().replace(hour=23, minute=59, second=59, microsecond=0)
+                try:
+                    cookie_manager.set(
+                        "elang_session_token",
+                        _pending_tok,
+                        expires_at=eod_aware,
+                        same_site="lax",
+                        key="set_cookie_login"
+                    )
+                except TypeError:
+                    cookie_manager.set(
+                        "elang_session_token",
+                        _pending_tok,
+                        expires_at=eod_aware,
+                        key="set_cookie_login"
+                    )
+            except Exception:
+                pass
+            st.session_state["_cookie_set_tries"] = tries + 1
+        else:
+            st.session_state.pop("_pending_cookie_set", None)
+            st.session_state.pop("_cookie_set_tries", None)
 
 user = next((u for u in worker.data["users"] if u["uid"] == st.session_state.user["uid"]), st.session_state.user)
 st.session_state.user = user
@@ -644,7 +825,7 @@ if page == "Akun":
     <div class="profile-card">
         <div class="profile-avatar">{svg('user', 36, 'white')}</div>
         <div class="profile-info">
-            <h3>{user['name']}</h3>
+            <h3>{html.escape(user['name'])}</h3>
             <p>UID: {user['uid']}</p>
         </div>
     </div>
@@ -715,14 +896,17 @@ if page == "Akun":
                             if d["name"] == old_name: d["name"] = new_name_clean
                         if old_name in worker.data["payroll"]:
                             worker.data["payroll"][new_name_clean] = worker.data["payroll"].pop(old_name)
+                        if old_name in worker.data["db_stats"]:
+                            worker.data["db_stats"][new_name_clean] = worker.data["db_stats"].pop(old_name)
+                            save_key_sync("db_stats.json")
                         for k in ["ndp", "wd", "video"]:
                             for r in worker.data["reports"][k]:
                                 if r["user"] == old_name: r["user"] = new_name_clean
-                        save_key("databases.json")
-                        save_key("payroll.json")
-                        save_key("reports.json")
+                        save_key_sync("databases.json")
+                        save_key_sync("payroll.json")
+                        save_key_sync("reports.json")
 
-                    save_users()
+                    save_users_sync()
                     st.toast("Profil berhasil diperbarui!")
                     st.rerun()
 
@@ -730,14 +914,12 @@ if page == "Akun":
         token = st.session_state.get("session_token")
         worker.delete_session(token)
 
-        if cookie_manager is not None:
-            try:
-                cookie_manager.delete("elang_session_token", key="del_cookie_logout")
-            except Exception:
-                pass
-
         st.session_state.pop("user", None)
         st.session_state.pop("session_token", None)
+        st.session_state.pop("_pending_cookie_set", None)
+        st.session_state.pop("_cookie_set_tries", None)
+        st.session_state["_pending_cookie_delete"] = True
+        st.session_state["_cookie_del_tries"] = 0
         st.rerun()
 
     if st.session_state.get("show_withdraw", False):
@@ -769,7 +951,7 @@ if page == "Akun":
                     worker.data["reports"]["wd"].append({
                         "user": user["name"], "amount": available,
                         "account": accounts[sel], "status": "pending",
-                        "time": str(datetime.now())
+                        "time": str(now_wib())
                     })
                     save_key("reports.json")
                     st.success(f"Pengajuan withdraw {fmt_rp(available)} terkirim!")
@@ -837,12 +1019,15 @@ elif user["role"] == "admin":
                                 worker.data["databases"] = [d for d in worker.data["databases"] if d["name"] != u["name"]]
                                 if u["name"] in worker.data["payroll"]:
                                     del worker.data["payroll"][u["name"]]
+                                if u["name"] in worker.data["db_stats"]:
+                                    del worker.data["db_stats"][u["name"]]
+                                    save_key_sync("db_stats.json")
                                 for k in ["ndp", "wd", "video"]:
                                     worker.data["reports"][k] = [r for r in worker.data["reports"][k] if r["user"] != u["name"]]
-                                save_users()
-                                save_key("databases.json")
-                                save_key("payroll.json")
-                                save_key("reports.json")
+                                save_users_sync()
+                                save_key_sync("databases.json")
+                                save_key_sync("payroll.json")
+                                save_key_sync("reports.json")
                                 st.session_state.confirm_delete = None
                                 st.success(f"Akun {u['name']} dihapus.")
                                 st.rerun()
@@ -855,7 +1040,26 @@ elif user["role"] == "admin":
             if karyawan_list:
                 st.info("Database dikirim secara privat — hanya karyawan terpilih yang bisa melihat. "
                         "Format: **1 baris = 1 DB** — `DB Nama` (pisahkan DB dan nama dengan spasi).")
-                target = st.selectbox("Pilih Karyawan", karyawan_list)
+                target = st.selectbox("Pilih Karyawan", karyawan_list, key="givedb_target")
+
+                existing_db = next((d for d in worker.data["databases"] if d["name"] == target), None)
+                replace_mode = "replace_drop"
+                if existing_db and existing_db.get("numbers"):
+                    st.warning(f"⚠ **{target}** saat ini masih memiliki **{len(existing_db['numbers'])} DB aktif**.")
+                    replace_mode = st.radio(
+                        "Perlakuan terhadap DB lama saat mengirim DB baru:",
+                        [
+                            "replace_drop",
+                            "replace_keep",
+                            "append"
+                        ],
+                        format_func=lambda x: {
+                            "replace_drop": "Ganti DB lama & hapus pengaruh DB lama dari statistik",
+                            "replace_keep": "Ganti DB lama & pertahankan pengaruh DB lama di statistik",
+                            "append": "Tambahkan ke DB yang sudah ada",
+                        }[x],
+                        key="givedb_replace_mode"
+                    )
 
                 db_input = st.text_area(
                     "Input Database",
@@ -883,11 +1087,17 @@ elif user["role"] == "admin":
                     if not parsed:
                         st.error("Tidak ada baris valid.")
                     else:
-                        worker.data["databases"] = [d for d in worker.data["databases"] if d["name"] != target]
-                        worker.data["databases"].append({
-                            "name": target,
-                            "numbers": parsed
-                        })
+                        if existing_db and existing_db.get("numbers") and replace_mode == "append":
+                            existing_db["numbers"].extend(parsed)
+                        else:
+                            if existing_db and existing_db.get("numbers") and replace_mode == "replace_keep":
+                                archive_db_items(target, existing_db["numbers"])
+                                save_key_sync("db_stats.json")
+                            worker.data["databases"] = [d for d in worker.data["databases"] if d["name"] != target]
+                            worker.data["databases"].append({
+                                "name": target,
+                                "numbers": parsed
+                            })
 
                         # ==== NOTIFIKASI OTOMATIS KE KARYAWAN ====
                         target_u = next((u for u in worker.data["users"] if u["name"] == target), None)
@@ -896,12 +1106,77 @@ elif user["role"] == "admin":
                                 "type": "db",
                                 "message": f"Anda menerima {len(parsed)} database baru dari admin",
                                 "read": False,
-                                "time": str(datetime.now())
+                                "time": str(now_wib())
                             })
-                            save_users()
+                            save_users_sync()
 
-                        save_key("databases.json")
-                        st.success(f"✅ {len(parsed)} DB dikirim privat ke {target}. Notifikasi terkirim.")
+                        save_key_sync("databases.json")
+                        st.success(f"{len(parsed)} DB dikirim privat ke {target}. Notifikasi terkirim.")
+                        st.rerun()
+
+                st.divider()
+                st.subheader("Tarik DB Karyawan")
+                st.caption("Cabut DB yang sudah dikirim (misal jika salah kirim) kapan saja.")
+                active_db_owners = [d["name"] for d in worker.data["databases"] if d.get("numbers")]
+                if not active_db_owners:
+                    st.info("Saat ini tidak ada karyawan yang memiliki DB aktif.")
+                else:
+                    rev_target = st.selectbox("Pilih Karyawan yang DB-nya Akan Ditarik", active_db_owners, key="rev_target_givedb")
+                    rev_db = next((d for d in worker.data["databases"] if d["name"] == rev_target), None)
+                    if rev_db and rev_db.get("numbers"):
+                        nums = rev_db["numbers"]
+                        st.caption(
+                            f"DB aktif **{rev_target}**: **{len(nums)}** item "
+                            f"(Dibalas: {sum(1 for n in nums if n['status']=='Dibalas')}, "
+                            f"Dibaca: {sum(1 for n in nums if n['status']=='Dibaca')}, "
+                            f"Terdaftar: {sum(1 for n in nums if n['status']=='Terdaftar')}, "
+                            f"Tidak Terdaftar: {sum(1 for n in nums if n['status']=='Tidak Terdaftar')})"
+                        )
+                        rev_mode = st.radio(
+                            "Mode Pencabutan",
+                            ["Tarik Semua DB", "Pilih Item DB Tertentu"],
+                            horizontal=True,
+                            key="rev_mode_givedb"
+                        )
+                        selected_ids = None
+                        if rev_mode == "Pilih Item DB Tertentu":
+                            id_map = {
+                                n["id"]: f"{idx+1}. {n['num']} ({n.get('name') or '-'}) [{n['status']}]"
+                                for idx, n in enumerate(nums)
+                            }
+                            selected_ids = st.multiselect(
+                                "Pilih Item DB yang Dicabut",
+                                list(id_map.keys()),
+                                format_func=lambda k: id_map[k],
+                                key="rev_items_givedb"
+                            )
+
+                        stat_choice = st.radio(
+                            "Pengaruh Terhadap Statistik (Analitik)",
+                            [
+                                "Pertahankan statistik (pengaruh DB tetap dihitung)",
+                                "Hapus pengaruh DB dari statistik"
+                            ],
+                            key="rev_stat_givedb"
+                        )
+                        keep_stats = stat_choice.startswith("Pertahankan")
+                        notify_emp = st.checkbox("Kirim notifikasi ke karyawan", value=True, key="rev_notify_givedb")
+
+                        if st.button("Cabut / Tarik DB", type="primary", icon=":material/undo:", key="btn_rev_givedb"):
+                            if rev_mode == "Pilih Item DB Tertentu" and not selected_ids:
+                                st.error("Pilih minimal 1 item DB untuk ditarik.")
+                            else:
+                                count_rev = revoke_employee_db(
+                                    rev_target,
+                                    item_ids=selected_ids,
+                                    keep_stats=keep_stats,
+                                    notify=notify_emp
+                                )
+                                st.success(
+                                    f"{count_rev} DB milik {rev_target} berhasil ditarik "
+                                    f"({'statistik dipertahankan' if keep_stats else 'pengaruh DB dihapus dari statistik'})."
+                                )
+                                st.rerun()
             else:
                 st.info("Belum ada karyawan.")
 
@@ -971,7 +1246,7 @@ elif user["role"] == "admin":
                 st.divider()
 
     elif page == "Analytic":
-        st.header("Analitik Kinerja")
+        st.header("Persentase Kinerja")
         employees = [u["name"] for u in worker.data["users"] if u["role"] == "karyawan"]
         if not employees:
             st.info("Belum ada karyawan.")
@@ -983,12 +1258,19 @@ elif user["role"] == "admin":
             total_ndp = sum(r.get("count", 0) for r in ndp_approved)
 
             my_db = next((d for d in worker.data["databases"] if d["name"] == selected), None)
-            if my_db:
-                total_db = len(my_db["numbers"])
-                done_db = sum(1 for n in my_db["numbers"] if n["status"] != "Tidak Terdaftar")
-                dibalas_db = sum(1 for n in my_db["numbers"] if n["status"] == "Dibalas")
-            else:
-                total_db = done_db = dibalas_db = 0
+            preserved = worker.data["db_stats"].get(selected)
+
+            active_total = len(my_db["numbers"]) if my_db else 0
+            active_done = sum(1 for n in my_db["numbers"] if n["status"] != "Tidak Terdaftar") if my_db else 0
+            active_dibalas = sum(1 for n in my_db["numbers"] if n["status"] == "Dibalas") if my_db else 0
+
+            pres_total = preserved.get("total", 0) if preserved else 0
+            pres_done = preserved.get("done", 0) if preserved else 0
+            pres_dibalas = preserved.get("dibalas", 0) if preserved else 0
+
+            total_db = active_total + pres_total
+            done_db = active_done + pres_done
+            dibalas_db = active_dibalas + pres_dibalas
 
             ndp_vid_approved = sum(
                 1 for n in worker.data["reports"]["ndp"]
@@ -1023,41 +1305,99 @@ elif user["role"] == "admin":
 
             st.progress(min(kinerja / 100, 1.0))
 
-            if my_db:
+            if pres_total > 0:
+                st.info(
+                    f"Termasuk **{pres_total} DB yang telah dicabut**: "
+                    f"Selesai **{pres_done}**, Dibalas **{pres_dibalas}**."
+                )
+                if st.button("Hapus Pengaruh DB Tarikan dari Statistik", key=f"clr_pres_{selected}", icon=":material/delete_sweep:"):
+                    worker.data["db_stats"].pop(selected, None)
+                    save_key_sync("db_stats.json")
+                    st.success("Pengaruh DB tarikan dihapus dari statistik.")
+                    st.rerun()
+
+            if (my_db and my_db.get("numbers")) or pres_total > 0:
                 st.divider()
                 st.subheader("Rincian Database")
 
                 status_order = ["Tidak Terdaftar", "Terdaftar", "Dibaca", "Dibalas"]
+                pres_counts = (preserved or {}).get("counts", {})
 
                 cols = st.columns(len(status_order))
                 for col, stt in zip(cols, status_order):
-                    cnt = sum(1 for n in my_db["numbers"] if n["status"] == stt)
+                    active_cnt = sum(1 for n in my_db["numbers"] if n["status"] == stt) if my_db else 0
+                    cnt = active_cnt + pres_counts.get(stt, 0)
                     col.metric(stt, cnt)
 
-                st.write("")
-                filter_st = st.multiselect(
-                    "Filter Status",
-                    status_order,
-                    default=status_order,
-                    key=f"anfilt_{selected}"
-                )
+                if my_db and my_db.get("numbers"):
+                    st.write("")
+                    filter_st = st.multiselect(
+                        "Filter Status",
+                        status_order,
+                        default=status_order,
+                        key=f"anfilt_{selected}"
+                    )
 
-                filtered = [n for n in my_db["numbers"] if n["status"] in filter_st]
+                    filtered = [n for n in my_db["numbers"] if n["status"] in filter_st]
 
-                if filtered:
-                    rows = [
-                        {
-                            "No": idx,
-                            "DB": n["num"],
-                            "Nama": n.get("name") or "-",
-                            "Status": n["status"],
-                        }
-                        for idx, n in enumerate(filtered, 1)
-                    ]
-                    st.dataframe(rows, use_container_width=True, hide_index=True)
-                    st.caption(f"Menampilkan **{len(filtered)}** dari **{len(my_db['numbers'])}** DB.")
+                    if filtered:
+                        rows = [
+                            {
+                                "No": idx,
+                                "DB": n["num"],
+                                "Nama": n.get("name") or "-",
+                                "Status": n["status"],
+                            }
+                            for idx, n in enumerate(filtered, 1)
+                        ]
+                        st.dataframe(rows, use_container_width=True, hide_index=True)
+                        st.caption(f"Menampilkan **{len(filtered)}** dari **{len(my_db['numbers'])}** DB aktif.")
+                    else:
+                        st.info("Tidak ada DB aktif dengan status yang dipilih.")
+
+                    with st.expander("Tarik / Cabut DB Karyawan Ini"):
+                        an_rev_mode = st.radio(
+                            "Mode Pencabutan",
+                            ["Tarik Semua DB", "Pilih Item DB Tertentu"],
+                            horizontal=True,
+                            key=f"an_rev_mode_{selected}"
+                        )
+                        an_sel_ids = None
+                        if an_rev_mode == "Pilih Item DB Tertentu":
+                            an_id_map = {
+                                n["id"]: f"{idx+1}. {n['num']} ({n.get('name') or '-'}) [{n['status']}]"
+                                for idx, n in enumerate(my_db["numbers"])
+                            }
+                            an_sel_ids = st.multiselect(
+                                "Pilih Item DB yang Dicabut",
+                                list(an_id_map.keys()),
+                                format_func=lambda k: an_id_map[k],
+                                key=f"an_rev_items_{selected}"
+                            )
+                        an_stat_choice = st.radio(
+                            "Pengaruh Terhadap Statistik",
+                            [
+                                "Pertahankan statistik (pengaruh DB tetap dihitung)",
+                                "Hapus pengaruh DB dari statistik"
+                            ],
+                            key=f"an_rev_stat_{selected}"
+                        )
+                        an_keep = an_stat_choice.startswith("Pertahankan")
+                        an_notify = st.checkbox("Kirim notifikasi ke karyawan", value=True, key=f"an_rev_notify_{selected}")
+                        if st.button("Cabut / Tarik DB", type="primary", icon=":material/undo:", key=f"an_rev_btn_{selected}"):
+                            if an_rev_mode == "Pilih Item DB Tertentu" and not an_sel_ids:
+                                st.error("Pilih minimal 1 item DB untuk ditarik.")
+                            else:
+                                count_rev = revoke_employee_db(
+                                    selected,
+                                    item_ids=an_sel_ids,
+                                    keep_stats=an_keep,
+                                    notify=an_notify
+                                )
+                                st.success(f"{count_rev} DB berhasil ditarik.")
+                                st.rerun()
                 else:
-                    st.info("Tidak ada DB dengan status yang dipilih.")
+                    st.caption("Saat ini karyawan tidak memiliki DB aktif (hanya statistik DB yang dipertahankan).")
             else:
                 st.info("Karyawan ini belum memiliki database.")
 
@@ -1202,7 +1542,7 @@ elif user["role"] == "admin":
             if not vids:
                 st.info("Belum ada video standalone.")
             else:
-                now = datetime.now()
+                now = now_wib()
                 today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
                 def _parse_t(s):
@@ -1311,7 +1651,7 @@ elif user["role"] == "admin":
 else:
     if page == "Data":
         st.header("Database Kerja Saya")
-        st.caption("Data ini privat — hanya Anda yang bisa melihat dan mengubah status.")
+        st.caption("Database akan dibagikan")
 
         unread = [n for n in user.get("notifications", []) if not n.get("read", False)]
         if unread:
@@ -1383,7 +1723,7 @@ else:
             )
             size_mb = 0
             if vid is not None:
-                size_mb = round(len(vid.getvalue()) / (1024 * 1024), 2)
+                size_mb = round(vid.size / (1024 * 1024), 2)
                 st.caption(f"Ukuran: **{size_mb} MB** / 200 MB")
                 if size_mb > 200:
                     st.error("File terlalu besar. Maksimal 200 MB.")
@@ -1396,7 +1736,7 @@ else:
             )
 
         st.write("")
-        if st.button("Ajukan NDP + Video", use_container_width=True, type="primary",
+        if st.button("Ajukan NDP", use_container_width=True, type="primary",
                      icon=":material/send:"):
             errors = []
             if not ndp_input.strip():
@@ -1414,8 +1754,8 @@ else:
                     with st.spinner(f"Mengupload video ({size_mb} MB)"):
                         key = worker.execute(
                             worker.upload_video_s3,
-                            vid.getvalue(),
-                            f"{user['uid']}_{int(datetime.now().timestamp())}_{vid.name}"
+                            vid,
+                            f"{user['uid']}_{int(now_wib().timestamp())}_{vid.name}"
                         )
                         if isinstance(key, Exception) or not str(key).startswith("videos/"):
                             raise Exception(str(key))
@@ -1428,10 +1768,10 @@ else:
                             "video_caption": caption,
                             "video_size_mb": size_mb,
                             "status": "pending",
-                            "time": str(datetime.now())
+                            "time": str(now_wib())
                         })
                         save_key("reports.json")
-                    st.success("Pengajuan NDP dan Video berhasil dikirim!")
+                    st.success("Pengajuan NDP berhasil dikirim!")
                     st.balloons()
                     st.rerun()
                 except Exception as e:
@@ -1467,7 +1807,7 @@ else:
         vid = st.file_uploader("Pilih Video (MP4/MOV)", type=["mp4", "mov"], key="up_vid")
         size_mb = 0
         if vid is not None:
-            size_mb = round(len(vid.getvalue()) / (1024 * 1024), 2)
+            size_mb = round(vid.size / (1024 * 1024), 2)
             st.caption(f"Ukuran: **{size_mb} MB** / 200 MB")
             if size_mb > 200:
                 st.error("File terlalu besar. Maksimal 200 MB.")
@@ -1477,7 +1817,7 @@ else:
 
         if st.button("Upload", use_container_width=True, icon=":material/upload:"):
             if vid is None:
-                st.error("Pilih video dulu!")
+                st.error("Pilih video terlebih dulu")
             elif not caption:
                 st.error("Caption tidak boleh kosong")
             else:
@@ -1485,8 +1825,8 @@ else:
                     with st.spinner(f"Mengupload {size_mb} MB..."):
                         key = worker.execute(
                             worker.upload_video_s3,
-                            vid.getvalue(),
-                            f"{user['uid']}_{int(datetime.now().timestamp())}_{vid.name}"
+                            vid,
+                            f"{user['uid']}_{int(now_wib().timestamp())}_{vid.name}"
                         )
                         if isinstance(key, Exception) or not str(key).startswith("videos/"):
                             raise Exception(str(key))
@@ -1497,7 +1837,7 @@ else:
                             "caption": caption,
                             "size_mb": size_mb,
                             "status": "pending",
-                            "time": str(datetime.now())
+                            "time": str(now_wib())
                         })
                         save_key("reports.json")
                     st.success("Video berhasil diupload!")
@@ -1509,10 +1849,10 @@ else:
         st.header("Teks Kerja")
 
         if not worker.data["texts"]:
-            st.info("Belum ada teks kerja dari Admin.")
+            st.info("Belum ada teks kerja")
         else:
             for t in worker.data["texts"]:
-                st.subheader(f"📌 {t['title']}")
+                st.subheader(f"¡ {t['title']}")
                 st.code(t['content'], language="text")
-                st.caption("👆 *Klik ikon copy di pojok kanan atas kotak untuk menyalin teks.*")
+                st.caption("*Klik ikon copy di pojok kanan atas kotak untuk menyalin teks.*")
                 st.write("")
