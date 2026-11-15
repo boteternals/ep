@@ -25,6 +25,7 @@ def now_wib():
 
 def today_wib_str():
     return now_wib().date().isoformat()
+
 from botocore.exceptions import ClientError
 from botocore.client import Config
 
@@ -547,6 +548,8 @@ worker.ensure_daily_reset()
 # ==========================================
 # 2. HELPERS
 # ==========================================
+DB_STATUSES = ["Belum Dicek", "Tidak Terdaftar", "Terdaftar", "Dibaca", "Dibalas"]
+
 def gen_uid():
     existing = {u["uid"] for u in worker.data["users"]}
     while True:
@@ -586,18 +589,13 @@ def archive_db_items(emp_name, items):
         "total": 0,
         "done": 0,
         "dibalas": 0,
-        "counts": {
-            "Tidak Terdaftar": 0,
-            "Terdaftar": 0,
-            "Dibaca": 0,
-            "Dibalas": 0,
-        }
+        "counts": {s: 0 for s in DB_STATUSES}
     })
     stats.setdefault("counts", {})
     for n in items:
-        stt = n.get("status", "Tidak Terdaftar")
+        stt = n.get("status", "Belum Dicek")
         stats["total"] = stats.get("total", 0) + 1
-        if stt != "Tidak Terdaftar":
+        if stt != "Belum Dicek":
             stats["done"] = stats.get("done", 0) + 1
         if stt == "Dibalas":
             stats["dibalas"] = stats.get("dibalas", 0) + 1
@@ -1045,7 +1043,7 @@ elif user["role"] == "admin":
                 existing_db = next((d for d in worker.data["databases"] if d["name"] == target), None)
                 replace_mode = "replace_drop"
                 if existing_db and existing_db.get("numbers"):
-                    st.warning(f"⚠ **{target}** saat ini masih memiliki **{len(existing_db['numbers'])} DB aktif**.")
+                    st.warning(f"⚠️ **{target}** saat ini masih memiliki **{len(existing_db['numbers'])} DB aktif**.")
                     replace_mode = st.radio(
                         "Perlakuan terhadap DB lama saat mengirim DB baru:",
                         [
@@ -1081,7 +1079,7 @@ elif user["role"] == "admin":
                             "id": uuid.uuid4().hex,
                             "num": num,
                             "name": nm,
-                            "status": "Tidak Terdaftar"
+                            "status": "Belum Dicek"
                         })
 
                     if not parsed:
@@ -1111,11 +1109,11 @@ elif user["role"] == "admin":
                             save_users_sync()
 
                         save_key_sync("databases.json")
-                        st.success(f"{len(parsed)} DB dikirim privat ke {target}. Notifikasi terkirim.")
+                        st.success(f"✅ {len(parsed)} DB dikirim privat ke {target}. Notifikasi terkirim.")
                         st.rerun()
 
                 st.divider()
-                st.subheader("Tarik DB Karyawan")
+                st.subheader("Tarik / Cabut DB Karyawan")
                 st.caption("Cabut DB yang sudah dikirim (misal jika salah kirim) kapan saja.")
                 active_db_owners = [d["name"] for d in worker.data["databases"] if d.get("numbers")]
                 if not active_db_owners:
@@ -1127,10 +1125,11 @@ elif user["role"] == "admin":
                         nums = rev_db["numbers"]
                         st.caption(
                             f"DB aktif **{rev_target}**: **{len(nums)}** item "
-                            f"(Dibalas: {sum(1 for n in nums if n['status']=='Dibalas')}, "
-                            f"Dibaca: {sum(1 for n in nums if n['status']=='Dibaca')}, "
-                            f"Terdaftar: {sum(1 for n in nums if n['status']=='Terdaftar')}, "
-                            f"Tidak Terdaftar: {sum(1 for n in nums if n['status']=='Tidak Terdaftar')})"
+                            f"(Belum Dicek: {sum(1 for n in nums if n.get('status', 'Belum Dicek')=='Belum Dicek')}, "
+                            f"Tidak Terdaftar: {sum(1 for n in nums if n.get('status')=='Tidak Terdaftar')}, "
+                            f"Terdaftar: {sum(1 for n in nums if n.get('status')=='Terdaftar')}, "
+                            f"Dibaca: {sum(1 for n in nums if n.get('status')=='Dibaca')}, "
+                            f"Dibalas: {sum(1 for n in nums if n.get('status')=='Dibalas')})"
                         )
                         rev_mode = st.radio(
                             "Mode Pencabutan",
@@ -1141,7 +1140,7 @@ elif user["role"] == "admin":
                         selected_ids = None
                         if rev_mode == "Pilih Item DB Tertentu":
                             id_map = {
-                                n["id"]: f"{idx+1}. {n['num']} ({n.get('name') or '-'}) [{n['status']}]"
+                                n["id"]: f"{idx+1}. {n['num']} ({n.get('name') or '-'}) [{n.get('status', 'Belum Dicek')}]"
                                 for idx, n in enumerate(nums)
                             }
                             selected_ids = st.multiselect(
@@ -1173,7 +1172,7 @@ elif user["role"] == "admin":
                                     notify=notify_emp
                                 )
                                 st.success(
-                                    f"{count_rev} DB milik {rev_target} berhasil ditarik "
+                                    f"✅ {count_rev} DB milik {rev_target} berhasil ditarik "
                                     f"({'statistik dipertahankan' if keep_stats else 'pengaruh DB dihapus dari statistik'})."
                                 )
                                 st.rerun()
@@ -1246,7 +1245,7 @@ elif user["role"] == "admin":
                 st.divider()
 
     elif page == "Analytic":
-        st.header("Persentase Kinerja")
+        st.header("Analitik Kinerja")
         employees = [u["name"] for u in worker.data["users"] if u["role"] == "karyawan"]
         if not employees:
             st.info("Belum ada karyawan.")
@@ -1259,17 +1258,21 @@ elif user["role"] == "admin":
 
             my_db = next((d for d in worker.data["databases"] if d["name"] == selected), None)
             preserved = worker.data["db_stats"].get(selected)
+            pres_counts = (preserved or {}).get("counts", {})
 
             active_total = len(my_db["numbers"]) if my_db else 0
-            active_done = sum(1 for n in my_db["numbers"] if n["status"] != "Tidak Terdaftar") if my_db else 0
-            active_dibalas = sum(1 for n in my_db["numbers"] if n["status"] == "Dibalas") if my_db else 0
+            active_done = sum(1 for n in my_db["numbers"] if n.get("status", "Belum Dicek") != "Belum Dicek") if my_db else 0
+            active_tidak = sum(1 for n in my_db["numbers"] if n.get("status") == "Tidak Terdaftar") if my_db else 0
+            active_dibalas = sum(1 for n in my_db["numbers"] if n.get("status") == "Dibalas") if my_db else 0
 
             pres_total = preserved.get("total", 0) if preserved else 0
             pres_done = preserved.get("done", 0) if preserved else 0
+            pres_tidak = pres_counts.get("Tidak Terdaftar", 0)
             pres_dibalas = preserved.get("dibalas", 0) if preserved else 0
 
             total_db = active_total + pres_total
             done_db = active_done + pres_done
+            tidak_db = active_tidak + pres_tidak
             dibalas_db = active_dibalas + pres_dibalas
 
             ndp_vid_approved = sum(
@@ -1293,22 +1296,38 @@ elif user["role"] == "admin":
             video_pending  = ndp_vid_pending + stand_vid_pending
             vid_total = video_approved + video_pending
 
-            db_pct = (dibalas_db / total_db * 100) if total_db > 0 else 0
-            video_pct = (video_approved / vid_total * 100) if vid_total > 0 else 0
+            checked_pct = (done_db / total_db * 100) if total_db > 0 else 0.0
+            valid_pool = max(total_db - tidak_db, 0)
+            if total_db == 0:
+                reply_pct = 0.0
+                db_pct = 0.0
+            elif valid_pool == 0:
+                reply_pct = 100.0 if done_db == total_db else 0.0
+                db_pct = checked_pct
+            else:
+                reply_pct = dibalas_db / valid_pool * 100
+                db_pct = (checked_pct + reply_pct) / 2
+
+            video_pct = (video_approved / vid_total * 100) if vid_total > 0 else 0.0
             kinerja = (db_pct + video_pct) / 2
 
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("NDP", total_ndp)
-            c2.metric("DB", f"{done_db}/{total_db}")
+            c2.metric("DB Dicek", f"{done_db}/{total_db}")
             c3.metric("Video", f"{video_approved}/{vid_total}")
             c4.metric("Kinerja", f"{kinerja:.1f}%")
 
             st.progress(min(kinerja / 100, 1.0))
+            st.caption(
+                f"Progres Cek DB: **{checked_pct:.1f}%** · "
+                f"Rasio Dibalas (dari DB valid/belum dicek): **{reply_pct:.1f}%** · "
+                f"Video Approved: **{video_pct:.1f}%**"
+            )
 
             if pres_total > 0:
                 st.info(
-                    f"Termasuk **{pres_total} DB yang telah dicabut**: "
-                    f"Selesai **{pres_done}**, Dibalas **{pres_dibalas}**."
+                    f"📊 Termasuk **{pres_total} DB yang telah dicabut** (statistik dipertahankan): "
+                    f"Dicek **{pres_done}**, Dibalas **{pres_dibalas}**."
                 )
                 if st.button("Hapus Pengaruh DB Tarikan dari Statistik", key=f"clr_pres_{selected}", icon=":material/delete_sweep:"):
                     worker.data["db_stats"].pop(selected, None)
@@ -1320,12 +1339,11 @@ elif user["role"] == "admin":
                 st.divider()
                 st.subheader("Rincian Database")
 
-                status_order = ["Tidak Terdaftar", "Terdaftar", "Dibaca", "Dibalas"]
-                pres_counts = (preserved or {}).get("counts", {})
+                status_order = list(DB_STATUSES)
 
                 cols = st.columns(len(status_order))
                 for col, stt in zip(cols, status_order):
-                    active_cnt = sum(1 for n in my_db["numbers"] if n["status"] == stt) if my_db else 0
+                    active_cnt = sum(1 for n in my_db["numbers"] if n.get("status", "Belum Dicek") == stt) if my_db else 0
                     cnt = active_cnt + pres_counts.get(stt, 0)
                     col.metric(stt, cnt)
 
@@ -1338,7 +1356,7 @@ elif user["role"] == "admin":
                         key=f"anfilt_{selected}"
                     )
 
-                    filtered = [n for n in my_db["numbers"] if n["status"] in filter_st]
+                    filtered = [n for n in my_db["numbers"] if n.get("status", "Belum Dicek") in filter_st]
 
                     if filtered:
                         rows = [
@@ -1346,7 +1364,7 @@ elif user["role"] == "admin":
                                 "No": idx,
                                 "DB": n["num"],
                                 "Nama": n.get("name") or "-",
-                                "Status": n["status"],
+                                "Status": n.get("status", "Belum Dicek"),
                             }
                             for idx, n in enumerate(filtered, 1)
                         ]
@@ -1365,7 +1383,7 @@ elif user["role"] == "admin":
                         an_sel_ids = None
                         if an_rev_mode == "Pilih Item DB Tertentu":
                             an_id_map = {
-                                n["id"]: f"{idx+1}. {n['num']} ({n.get('name') or '-'}) [{n['status']}]"
+                                n["id"]: f"{idx+1}. {n['num']} ({n.get('name') or '-'}) [{n.get('status', 'Belum Dicek')}]"
                                 for idx, n in enumerate(my_db["numbers"])
                             }
                             an_sel_ids = st.multiselect(
@@ -1651,7 +1669,7 @@ elif user["role"] == "admin":
 else:
     if page == "Data":
         st.header("Database Kerja Saya")
-        st.caption("Database akan dibagikan")
+        st.caption("Data ini privat — hanya Anda yang bisa melihat dan mengubah status.")
 
         unread = [n for n in user.get("notifications", []) if not n.get("read", False)]
         if unread:
@@ -1670,7 +1688,7 @@ else:
                     st.rerun()
 
         my_db = next((d for d in worker.data["databases"] if d["name"] == user["name"]), None)
-        statuses = ["Tidak Terdaftar", "Terdaftar", "Dibaca", "Dibalas"]
+        statuses = list(DB_STATUSES)
 
         if my_db and my_db.get("numbers"):
             st.caption(f"Total: **{len(my_db['numbers'])}** DB")
@@ -1686,12 +1704,13 @@ else:
                     st.code(item.get("name") or "-", language="text")
 
                     st.caption("Status")
-                    curr = statuses.index(item["status"]) if item["status"] in statuses else 0
+                    cur_status = item.get("status", "Belum Dicek")
+                    curr = statuses.index(cur_status) if cur_status in statuses else 0
                     new_st = st.radio(
                         "Status", statuses, index=curr,
                         key=f"st_{item_id}", label_visibility="collapsed"
                     )
-                    if new_st != item["status"]:
+                    if new_st != cur_status:
                         item["status"] = new_st
                         save_key("databases.json")
                         st.rerun()
@@ -1736,7 +1755,7 @@ else:
             )
 
         st.write("")
-        if st.button("Ajukan NDP", use_container_width=True, type="primary",
+        if st.button("Ajukan NDP + Video", use_container_width=True, type="primary",
                      icon=":material/send:"):
             errors = []
             if not ndp_input.strip():
@@ -1771,7 +1790,7 @@ else:
                             "time": str(now_wib())
                         })
                         save_key("reports.json")
-                    st.success("Pengajuan NDP berhasil dikirim!")
+                    st.success("Pengajuan NDP dan Video berhasil dikirim!")
                     st.balloons()
                     st.rerun()
                 except Exception as e:
@@ -1817,7 +1836,7 @@ else:
 
         if st.button("Upload", use_container_width=True, icon=":material/upload:"):
             if vid is None:
-                st.error("Pilih video terlebih dulu")
+                st.error("Pilih video dulu!")
             elif not caption:
                 st.error("Caption tidak boleh kosong")
             else:
@@ -1849,10 +1868,10 @@ else:
         st.header("Teks Kerja")
 
         if not worker.data["texts"]:
-            st.info("Belum ada teks kerja")
+            st.info("Belum ada teks kerja dari Admin.")
         else:
             for t in worker.data["texts"]:
                 st.subheader(f"¡ {t['title']}")
                 st.code(t['content'], language="text")
-                st.caption("*Klik ikon copy di pojok kanan atas kotak untuk menyalin teks.*")
+                st.caption(" *Klik ikon copy di pojok kanan atas kotak untuk menyalin teks.*")
                 st.write("")
