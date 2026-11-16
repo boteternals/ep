@@ -77,6 +77,7 @@ st.markdown("""
         flex: 1; text-align: center; margin: 0 !important;
         padding: 8px 4px 6px 4px !important; cursor: pointer;
         display: flex; flex-direction: column; align-items: center;
+        justify-content: center;
         position: relative; border-radius: 12px;
         transition: background 0.25s ease, transform 0.2s ease;
     }
@@ -92,7 +93,12 @@ st.markdown("""
         box-shadow: 0 0 10px #38BDF8;
     }
     .st-key-nav_bottom div[data-testid="stRadio"] label:has(input:checked)::before { width: 45%; }
-    .st-key-nav_bottom div[data-testid="stRadio"] label > div:first-child { display: none !important; }
+    .st-key-nav_bottom div[data-testid="stRadio"] label > div:not([data-testid="stMarkdownContainer"]):not(:has([data-testid="stMarkdownContainer"])) {
+        display: none !important;
+    }
+    .st-key-nav_bottom div[data-testid="stRadio"] label input[type="radio"] {
+        display: none !important;
+    }
     .st-key-nav_bottom div[data-testid="stRadio"] label p {
         display: flex; flex-direction: column; align-items: center;
         justify-content: center; gap: 4px;
@@ -110,7 +116,6 @@ st.markdown("""
         filter: invert(63%) sepia(54%) saturate(3282%) hue-rotate(177deg) brightness(99%) contrast(95%);
         transform: scale(1.12);
     }
-    /* Sembunyikan label "Nav" (label_visibility=collapsed sudah handle, tapi ekstra aman) */
     .st-key-nav_bottom div[data-testid="stRadio"] > label { display: none !important; }
 
     /* =====================================================
@@ -235,22 +240,26 @@ cookie_manager = get_cookie_manager()
 # SVG INLINE HELPER
 # ==========================================
 _SVG_PATHS = {
-    "check":      '<polyline points="20 6 9 17 4 12"/>',
-    "x":          '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
-    "trash":      '<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
-    "download":   '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>',
-    "video":      '<polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>',
-    "clock":      '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
-    "calendar":   '<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
-    "folder":     '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>',
-    "pending":    '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>',
-    "link":       '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
-    "package":    '<line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>',
-    "user":       '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
-    "bell":       '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
-    "send":       '<line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>',
-    "alert":      '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
-    "info":       '<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>',
+    "check":        '<polyline points="20 6 9 17 4 12"/>',
+    "check_circle": '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>',
+    "x":            '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
+    "trash":        '<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
+    "download":     '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>',
+    "video":        '<polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>',
+    "clock":        '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+    "calendar":     '<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
+    "folder":       '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>',
+    "pending":      '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>',
+    "link":         '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+    "package":      '<line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>',
+    "user":         '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+    "bell":         '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
+    "send":         '<line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>',
+    "alert":        '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
+    "info":         '<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>',
+    "chart":        '<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>',
+    "file":         '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>',
+    "copy":         '<rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
 }
 
 def svg(name, size=16, color="#38BDF8"):
@@ -263,6 +272,15 @@ def svg(name, size=16, color="#38BDF8"):
 
 def svg_html(name, text, size=16, color="#38BDF8"):
     return f"{svg(name, size, color)} <span style='vertical-align:middle;'>{text}</span>"
+
+def svg_box(icon_name, text_html, bg="rgba(30, 58, 138, 0.35)", border="#3B82F6", color="#38BDF8"):
+    return (
+        f"<div style='display:flex;align-items:flex-start;gap:10px;padding:12px 14px;"
+        f"border-radius:12px;background:{bg};border:1px solid {border};"
+        f"color:#E2E8F0;font-size:14px;margin:8px 0;'>"
+        f"<div style='flex-shrink:0;margin-top:2px;'>{svg(icon_name, 18, color)}</div>"
+        f"<div style='line-height:1.45;'>{text_html}</div></div>"
+    )
 
 
 # ==========================================
@@ -1043,7 +1061,17 @@ elif user["role"] == "admin":
                 existing_db = next((d for d in worker.data["databases"] if d["name"] == target), None)
                 replace_mode = "replace_drop"
                 if existing_db and existing_db.get("numbers"):
-                    st.warning(f"⚠️ **{target}** saat ini masih memiliki **{len(existing_db['numbers'])} DB aktif**.")
+                    st.markdown(
+                        svg_box(
+                            "alert",
+                            f"<b>{html.escape(target)}</b> saat ini masih memiliki "
+                            f"<b>{len(existing_db['numbers'])} DB aktif</b>.",
+                            bg="rgba(245, 158, 11, 0.14)",
+                            border="#F59E0B",
+                            color="#FBBF24",
+                        ),
+                        unsafe_allow_html=True,
+                    )
                     replace_mode = st.radio(
                         "Perlakuan terhadap DB lama saat mengirim DB baru:",
                         [
@@ -1109,7 +1137,7 @@ elif user["role"] == "admin":
                             save_users_sync()
 
                         save_key_sync("databases.json")
-                        st.success(f"✅ {len(parsed)} DB dikirim privat ke {target}. Notifikasi terkirim.")
+                        st.success(f"{len(parsed)} DB dikirim privat ke {target}. Notifikasi terkirim.", icon=":material/check_circle:")
                         st.rerun()
 
                 st.divider()
@@ -1172,8 +1200,9 @@ elif user["role"] == "admin":
                                     notify=notify_emp
                                 )
                                 st.success(
-                                    f"✅ {count_rev} DB milik {rev_target} berhasil ditarik "
-                                    f"({'statistik dipertahankan' if keep_stats else 'pengaruh DB dihapus dari statistik'})."
+                                    f"{count_rev} DB milik {rev_target} berhasil ditarik "
+                                    f"({'statistik dipertahankan' if keep_stats else 'pengaruh DB dihapus dari statistik'}).",
+                                    icon=":material/check_circle:"
                                 )
                                 st.rerun()
             else:
@@ -1192,7 +1221,7 @@ elif user["role"] == "admin":
                             "content": new_content
                         })
                         save_key("texts.json")
-                        st.success("Teks berhasil ditambahkan!")
+                        st.success("Teks berhasil ditambahkan!", icon=":material/check_circle:")
                         st.rerun()
                     else:
                         st.error("Judul dan Isi Teks tidak boleh kosong.")
@@ -1203,7 +1232,7 @@ elif user["role"] == "admin":
                 st.info("Belum ada teks yang tersimpan.")
             else:
                 for idx, t in enumerate(worker.data["texts"]):
-                    with st.expander(f"📄 {t['title']}"):
+                    with st.expander(t["title"], icon=":material/description:"):
                         with st.form(f"edit_form_{t['id']}"):
                             edit_title = st.text_input("Edit Judul", value=t["title"])
                             edit_content = st.text_area("Edit Isi Teks", value=t["content"], height=150)
@@ -1325,14 +1354,18 @@ elif user["role"] == "admin":
             )
 
             if pres_total > 0:
-                st.info(
-                    f"📊 Termasuk **{pres_total} DB yang telah dicabut** (statistik dipertahankan): "
-                    f"Dicek **{pres_done}**, Dibalas **{pres_dibalas}**."
+                st.markdown(
+                    svg_box(
+                        "chart",
+                        f"Termasuk <b>{pres_total} DB yang telah dicabut</b> (statistik dipertahankan): "
+                        f"Dicek <b>{pres_done}</b>, Dibalas <b>{pres_dibalas}</b>."
+                    ),
+                    unsafe_allow_html=True,
                 )
                 if st.button("Hapus Pengaruh DB Tarikan dari Statistik", key=f"clr_pres_{selected}", icon=":material/delete_sweep:"):
                     worker.data["db_stats"].pop(selected, None)
                     save_key_sync("db_stats.json")
-                    st.success("Pengaruh DB tarikan dihapus dari statistik.")
+                    st.success("Pengaruh DB tarikan dihapus dari statistik.", icon=":material/check_circle:")
                     st.rerun()
 
             if (my_db and my_db.get("numbers")) or pres_total > 0:
@@ -1359,16 +1392,44 @@ elif user["role"] == "admin":
                     filtered = [n for n in my_db["numbers"] if n.get("status", "Belum Dicek") in filter_st]
 
                     if filtered:
-                        rows = [
-                            {
-                                "No": idx,
-                                "DB": n["num"],
-                                "Nama": n.get("name") or "-",
-                                "Status": n.get("status", "Belum Dicek"),
-                            }
-                            for idx, n in enumerate(filtered, 1)
-                        ]
-                        st.dataframe(rows, use_container_width=True, hide_index=True)
+                        status_badge_colors = {
+                            "Belum Dicek":     ("#334155", "#CBD5E1"),
+                            "Tidak Terdaftar": ("#451A03", "#FBBF24"),
+                            "Terdaftar":       ("#1E3A8A", "#93C5FD"),
+                            "Dibaca":          ("#164E63", "#67E8F9"),
+                            "Dibalas":         ("#064E3B", "#34D399"),
+                        }
+                        tr_html = []
+                        for idx, n in enumerate(filtered, 1):
+                            stt_val = n.get("status", "Belum Dicek")
+                            bg, fg = status_badge_colors.get(stt_val, ("#1E293B", "#E2E8F0"))
+                            num_esc = html.escape(str(n.get("num", "-")))
+                            name_esc = html.escape(str(n.get("name") or "-"))
+                            stt_esc = html.escape(str(stt_val))
+                            tr_html.append(
+                                f"<tr style='border-bottom:1px solid #1E3A8A;'>"
+                                f"<td style='padding:8px 10px;color:#94A3B8;'>{idx}</td>"
+                                f"<td style='padding:8px 10px;color:#F8FAFC;font-family:monospace;'>{num_esc}</td>"
+                                f"<td style='padding:8px 10px;color:#E2E8F0;'>{name_esc}</td>"
+                                f"<td style='padding:8px 10px;'>"
+                                f"<span style='background:{bg};color:{fg};padding:2px 8px;"
+                                f"border-radius:999px;font-size:11px;font-weight:600;white-space:nowrap;'>"
+                                f"{stt_esc}</span></td></tr>"
+                            )
+                        table_html = (
+                            "<div style='overflow-x:auto;border:1px solid #1E3A8A;border-radius:12px;"
+                            "background:#0F172A;margin-bottom:8px;'>"
+                            "<table style='width:100%;border-collapse:collapse;font-size:13px;text-align:left;'>"
+                            "<thead><tr style='background:#1E293B;color:#38BDF8;border-bottom:1px solid #1E3A8A;'>"
+                            "<th style='padding:10px;'>No</th>"
+                            "<th style='padding:10px;'>DB</th>"
+                            "<th style='padding:10px;'>Nama</th>"
+                            "<th style='padding:10px;'>Status</th>"
+                            "</tr></thead><tbody>"
+                            + "".join(tr_html) +
+                            "</tbody></table></div>"
+                        )
+                        st.markdown(table_html, unsafe_allow_html=True)
                         st.caption(f"Menampilkan **{len(filtered)}** dari **{len(my_db['numbers'])}** DB aktif.")
                     else:
                         st.info("Tidak ada DB aktif dengan status yang dipilih.")
@@ -1412,7 +1473,7 @@ elif user["role"] == "admin":
                                     keep_stats=an_keep,
                                     notify=an_notify
                                 )
-                                st.success(f"{count_rev} DB berhasil ditarik.")
+                                st.success(f"{count_rev} DB berhasil ditarik.", icon=":material/check_circle:")
                                 st.rerun()
                 else:
                     st.caption("Saat ini karyawan tidak memiliki DB aktif (hanya statistik DB yang dipertahankan).")
@@ -1679,7 +1740,7 @@ else:
                     unsafe_allow_html=True
                 )
                 for n in unread:
-                    st.write(f"- {n['message']}  \n  <span style='color:#64748B;font-size:11px;'>{n.get('time','')}</span>",
+                    st.write(f"- {html.escape(n['message'])}  \n  <span style='color:#64748B;font-size:11px;'>{html.escape(str(n.get('time','')))}</span>",
                              unsafe_allow_html=True)
                 if st.button("Tandai Dibaca", use_container_width=True, icon=":material/done_all:"):
                     for n in user.get("notifications", []):
@@ -1790,7 +1851,7 @@ else:
                             "time": str(now_wib())
                         })
                         save_key("reports.json")
-                    st.success("Pengajuan NDP dan Video berhasil dikirim!")
+                    st.success("Pengajuan NDP dan Video berhasil dikirim!", icon=":material/check_circle:")
                     st.balloons()
                     st.rerun()
                 except Exception as e:
@@ -1859,7 +1920,7 @@ else:
                             "time": str(now_wib())
                         })
                         save_key("reports.json")
-                    st.success("Video berhasil diupload!")
+                    st.success("Video berhasil diupload!", icon=":material/check_circle:")
                     st.rerun()
                 except Exception as e:
                     st.error(f"Upload gagal: {e}")
@@ -1871,7 +1932,16 @@ else:
             st.info("Belum ada teks kerja dari Admin.")
         else:
             for t in worker.data["texts"]:
-                st.subheader(f"¡ {t['title']}")
+                st.markdown(
+                    f"<h3 style='margin-bottom:6px;'>{svg('file', 20)} "
+                    f"<span style='vertical-align:middle;'>{html.escape(t['title'])}</span></h3>",
+                    unsafe_allow_html=True,
+                )
                 st.code(t['content'], language="text")
-                st.caption(" *Klik ikon copy di pojok kanan atas kotak untuk menyalin teks.*")
+                st.markdown(
+                    f"<p style='font-size:12px;color:#94A3B8;margin-top:-6px;'>"
+                    f"{svg('copy', 14, '#94A3B8')} <span style='vertical-align:middle;'>"
+                    f"<i>Klik ikon copy di pojok kanan atas kotak untuk menyalin teks.</i></span></p>",
+                    unsafe_allow_html=True,
+                )
                 st.write("")
