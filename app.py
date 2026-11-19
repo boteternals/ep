@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import boto3
 import json
 import hashlib
@@ -38,7 +39,7 @@ except ImportError:
 
 
 # ==========================================
-# 0. PAGE CONFIG & CSS (TEMA BIRU)
+# 0. PAGE CONFIG & CSS (TEMA BIRU ELANG)
 # ==========================================
 st.set_page_config(
     page_title="ElangPintar",
@@ -54,8 +55,10 @@ st.markdown("""
     [data-testid="stSidebar"] {display: none;}
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
-    header {visibility: hidden;}
-    .block-container { padding-bottom: 130px !important; padding-top: 2rem !important; }
+    header, header[data-testid="stHeader"] {
+        visibility: hidden; height: 0 !important; min-height: 0 !important;
+    }
+    .block-container { padding-bottom: 120px !important; padding-top: 1.2rem !important; }
     h1, h2, h3, h4, h5, h6 { color: #E0F2FE !important; }
     .stMarkdown p, label { color: #CBD5E1; }
 
@@ -65,7 +68,7 @@ st.markdown("""
     .st-key-nav_bottom div[data-testid="stRadio"] {
         position: fixed; bottom: 0; left: 0; right: 0;
         background: linear-gradient(180deg, #0B132B 0%, #020617 100%);
-        padding: 12px 5px 16px 5px; z-index: 9999;
+        padding: 10px 5px 14px 5px; z-index: 9999;
         border-top: 1px solid #1E3A8A;
         box-shadow: 0 -8px 25px rgba(30, 64, 175, 0.35);
     }
@@ -77,7 +80,6 @@ st.markdown("""
         flex: 1; text-align: center; margin: 0 !important;
         padding: 8px 4px 6px 4px !important; cursor: pointer;
         display: flex; flex-direction: column; align-items: center;
-        justify-content: center;
         position: relative; border-radius: 12px;
         transition: background 0.25s ease, transform 0.2s ease;
     }
@@ -93,12 +95,18 @@ st.markdown("""
         box-shadow: 0 0 10px #38BDF8;
     }
     .st-key-nav_bottom div[data-testid="stRadio"] label:has(input:checked)::before { width: 45%; }
-    .st-key-nav_bottom div[data-testid="stRadio"] label > div:not([data-testid="stMarkdownContainer"]):not(:has([data-testid="stMarkdownContainer"])) {
+
+    /* Sembunyikan lingkaran radio bawaan Streamlit (versi lama & terbaru) */
+    .st-key-nav_bottom div[data-testid="stRadio"] label > div:first-child,
+    .st-key-nav_bottom div[data-testid="stRadio"] [data-baseweb="radio"] > div:first-child,
+    .st-key-nav_bottom div[data-testid="stRadio"] input[type="radio"] {
         display: none !important;
+        width: 0 !important;
+        height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
     }
-    .st-key-nav_bottom div[data-testid="stRadio"] label input[type="radio"] {
-        display: none !important;
-    }
+
     .st-key-nav_bottom div[data-testid="stRadio"] label p {
         display: flex; flex-direction: column; align-items: center;
         justify-content: center; gap: 4px;
@@ -158,7 +166,7 @@ st.markdown("""
     .profile-card {
         background: linear-gradient(135deg, #1E3A8A 0%, #3B82F6 100%);
         border-radius: 20px; padding: 20px; color: white;
-        display: flex; align-items: center; margin-bottom: 20px;
+        display: flex; align-items: center; margin-bottom: 16px;
         box-shadow: 0 10px 28px rgba(59, 130, 246, 0.4);
         border: 1px solid rgba(96, 165, 250, 0.35);
     }
@@ -171,41 +179,6 @@ st.markdown("""
     }
     .profile-info h3 { margin: 0; font-size: 20px; font-weight: 700; color: white !important; }
     .profile-info p { margin: 5px 0 0 0; font-size: 13px; color: rgba(255,255,255,0.85) !important; }
-    .wallet-card {
-        background: linear-gradient(135deg, #1E40AF 0%, #3B82F6 45%, #0EA5E9 100%);
-        border-radius: 24px; padding: 22px 24px; color: white;
-        margin-bottom: 20px;
-        box-shadow: 0 12px 32px rgba(59, 130, 246, 0.45), inset 0 1px 0 rgba(255,255,255,0.25);
-        position: relative; overflow: hidden;
-        border: 1px solid rgba(96, 165, 250, 0.4);
-    }
-    .wallet-card::before {
-        content: ''; position: absolute; top: -60%; right: -20%;
-        width: 200%; height: 200%;
-        background: radial-gradient(circle, rgba(255,255,255,0.18) 0%, transparent 55%);
-        pointer-events: none;
-    }
-    .wallet-header {
-        display: flex; align-items: center; gap: 8px;
-        font-size: 13px; opacity: 0.95; font-weight: 500;
-        margin-bottom: 4px; position: relative; z-index: 1;
-    }
-    .wallet-balance {
-        font-size: 34px; font-weight: 800; letter-spacing: -0.5px;
-        margin: 10px 0 6px 0; text-shadow: 0 3px 10px rgba(0,0,0,0.25);
-        position: relative; z-index: 1;
-    }
-    .wallet-footer {
-        display: flex; justify-content: space-between; align-items: center;
-        font-size: 12px; opacity: 0.92; margin-top: 14px;
-        padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.28);
-        position: relative; z-index: 1;
-    }
-    .wallet-badge {
-        background: rgba(255,255,255,0.22); padding: 3px 10px;
-        border-radius: 20px; font-size: 11px; font-weight: 600;
-        backdrop-filter: blur(6px);
-    }
     .list-item {
         background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%);
         padding: 14px 16px; border-radius: 14px; margin-bottom: 10px;
@@ -240,26 +213,22 @@ cookie_manager = get_cookie_manager()
 # SVG INLINE HELPER
 # ==========================================
 _SVG_PATHS = {
-    "check":        '<polyline points="20 6 9 17 4 12"/>',
-    "check_circle": '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>',
-    "x":            '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
-    "trash":        '<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
-    "download":     '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>',
-    "video":        '<polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>',
-    "clock":        '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
-    "calendar":     '<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
-    "folder":       '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>',
-    "pending":      '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>',
-    "link":         '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
-    "package":      '<line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>',
-    "user":         '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
-    "bell":         '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
-    "send":         '<line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>',
-    "alert":        '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
-    "info":         '<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>',
-    "chart":        '<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>',
-    "file":         '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>',
-    "copy":         '<rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+    "check":      '<polyline points="20 6 9 17 4 12"/>',
+    "x":          '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
+    "trash":      '<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
+    "download":   '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>',
+    "video":      '<polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>',
+    "clock":      '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+    "calendar":   '<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
+    "folder":     '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>',
+    "pending":    '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>',
+    "link":       '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+    "package":    '<line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>',
+    "user":       '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+    "bell":       '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
+    "send":       '<line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>',
+    "alert":      '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
+    "info":       '<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>',
 }
 
 def svg(name, size=16, color="#38BDF8"):
@@ -272,15 +241,6 @@ def svg(name, size=16, color="#38BDF8"):
 
 def svg_html(name, text, size=16, color="#38BDF8"):
     return f"{svg(name, size, color)} <span style='vertical-align:middle;'>{text}</span>"
-
-def svg_box(icon_name, text_html, bg="rgba(30, 58, 138, 0.35)", border="#3B82F6", color="#38BDF8"):
-    return (
-        f"<div style='display:flex;align-items:flex-start;gap:10px;padding:12px 14px;"
-        f"border-radius:12px;background:{bg};border:1px solid {border};"
-        f"color:#E2E8F0;font-size:14px;margin:8px 0;'>"
-        f"<div style='flex-shrink:0;margin-top:2px;'>{svg(icon_name, 18, color)}</div>"
-        f"<div style='line-height:1.45;'>{text_html}</div></div>"
-    )
 
 
 # ==========================================
@@ -329,7 +289,7 @@ def get_worker():
             if isinstance(texts_raw, dict) and "content" in texts_raw:
                 old_content = texts_raw.get("content", "")
                 if old_content:
-                    texts_raw = [{"id": uuid.uuid4().hex, "title": "Teks Kerja Utama", "content": old_content}]
+                    texts_raw = [{"id": uuid.uuid4().hex, "title": "Teks Kerja Utama", "content": old_content, "image_key": None}]
                 else:
                     texts_raw = []
                 self._save("texts.json", texts_raw)
@@ -346,6 +306,7 @@ def get_worker():
                 "reports": self._load("reports.json", {"ndp": [], "wd": [], "video": []}),
                 "sessions": self._load("sessions.json", {}),
                 "db_stats": self._load("db_stats.json", {}),
+                "popups": self._load("popups.json", []),
                 "meta": meta_raw,
             }
 
@@ -387,6 +348,7 @@ def get_worker():
                         break
 
             self.ensure_daily_reset()
+            self.cleanup_expired_popups()
             self._cleanup_expired_sessions()
 
             self.thread = threading.Thread(target=self._process_queue, daemon=True)
@@ -413,6 +375,7 @@ def get_worker():
             )
 
         def ensure_daily_reset(self):
+            # Catatan: texts.json dan popups.json TIDAK ikut terhapus harian
             today_str = today_wib_str()
             if self.last_reset_date == today_str:
                 return False
@@ -421,17 +384,38 @@ def get_worker():
                 if self.last_reset_date == today_str:
                     return False
                 self.data["databases"] = []
-                self.data["texts"] = []
                 self.data["sessions"] = {}
                 self.data["db_stats"] = {}
                 self.data["meta"] = {"last_reset_date": today_str}
                 self._save("databases.json", [])
-                self._save("texts.json", [])
                 self._save("sessions.json", {})
                 self._save("db_stats.json", {})
                 self._save("meta.json", self.data["meta"])
                 self.last_reset_date = today_str
                 return True
+
+        def cleanup_expired_popups(self):
+            now_iso = now_wib().isoformat()
+            with self.lock:
+                popups = self.data.get("popups", [])
+                active = []
+                expired = []
+                for p in popups:
+                    exp = p.get("expires_at", "")
+                    if exp and now_iso > exp:
+                        expired.append(p)
+                    else:
+                        active.append(p)
+                if expired:
+                    for p in expired:
+                        ikey = p.get("image_key")
+                        if ikey:
+                            try:
+                                self.s3.delete_object(Bucket=self.bucket, Key=ikey)
+                            except Exception:
+                                pass
+                    self.data["popups"] = active
+                    self._save("popups.json", active)
 
         def _process_queue(self):
             while True:
@@ -468,6 +452,30 @@ def get_worker():
             self.s3.put_object(Bucket=self.bucket, Key=f"uploads/{filename}", Body=file_bytes)
             return True
 
+        def upload_image_s3(self, file_obj_or_bytes, filename):
+            try:
+                if file_obj_or_bytes is None:
+                    return "ERROR: File kosong."
+                safe = re.sub(r"[^A-Za-z0-9._-]", "_", filename)
+                key = f"images/{uuid.uuid4().hex[:8]}_{safe}"
+                mime_type = mimetypes.guess_type(filename)[0] or "image/png"
+                if hasattr(file_obj_or_bytes, "read"):
+                    file_obj_or_bytes.seek(0)
+                    self.s3.upload_fileobj(
+                        file_obj_or_bytes, self.bucket, key,
+                        ExtraArgs={"ContentType": mime_type}
+                    )
+                else:
+                    if not file_obj_or_bytes:
+                        return "ERROR: File kosong."
+                    self.s3.put_object(
+                        Bucket=self.bucket, Key=key,
+                        Body=file_obj_or_bytes, ContentType=mime_type
+                    )
+                return key
+            except Exception as e:
+                return f"ERROR: {type(e).__name__}: {e}"
+
         def upload_video_s3(self, file_obj_or_bytes, filename):
             try:
                 if file_obj_or_bytes is None:
@@ -492,7 +500,9 @@ def get_worker():
             except Exception as e:
                 return f"ERROR: {type(e).__name__}: {e}"
 
-        def video_link(self, key, expires=3600):
+        def media_link(self, key, expires=3600):
+            if not key:
+                return ""
             try:
                 return self.s3.generate_presigned_url(
                     "get_object",
@@ -502,12 +512,20 @@ def get_worker():
             except Exception:
                 return ""
 
-        def delete_video_s3(self, key):
+        def video_link(self, key, expires=3600):
+            return self.media_link(key, expires=expires)
+
+        def delete_media_s3(self, key):
+            if not key:
+                return "OK"
             try:
                 self.s3.delete_object(Bucket=self.bucket, Key=key)
                 return "OK"
             except Exception as e:
                 return f"ERROR: {e}"
+
+        def delete_video_s3(self, key):
+            return self.delete_media_s3(key)
 
         def _end_of_day_iso(self):
             now = now_wib()
@@ -561,6 +579,7 @@ def get_worker():
 
 worker = get_worker()
 worker.ensure_daily_reset()
+worker.cleanup_expired_popups()
 
 
 # ==========================================
@@ -587,6 +606,24 @@ def fmt_rp(n):
         return f"Rp {int(n):,}".replace(",", ".")
     except Exception:
         return f"Rp {n}"
+
+def fmt_remaining(expires_iso):
+    try:
+        exp = datetime.fromisoformat(expires_iso)
+        diff = exp - now_wib()
+        secs = int(diff.total_seconds())
+        if secs <= 0:
+            return "Kedaluwarsa"
+        days, rem = divmod(secs, 86400)
+        hours, rem = divmod(rem, 3600)
+        mins, _ = divmod(rem, 60)
+        parts = []
+        if days: parts.append(f"{days}h")
+        if hours: parts.append(f"{hours}j")
+        if mins or not parts: parts.append(f"{mins}m")
+        return " ".join(parts)
+    except Exception:
+        return "-"
 
 def save_users():
     worker.execute_async(worker.save_file, "users.json", copy.deepcopy(worker.data["users"]))
@@ -657,6 +694,204 @@ def revoke_employee_db(emp_name, item_ids=None, keep_stats=True, notify=True):
             })
             save_users_sync()
     return len(revoked)
+
+def render_eagle_wallet_card(balance, role_label, owner_name):
+    bal_int = int(balance or 0)
+    safe_owner = html.escape(owner_name or "")
+    safe_role = html.escape(role_label or "Karyawan")
+    wib_now_txt = now_wib().strftime("%d %b %Y · %H:%M WIB")
+    card_html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        * {{ box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }}
+        body {{ background: transparent; overflow: hidden; padding: 2px; }}
+        .eagle-card {{
+            position: relative;
+            border-radius: 24px;
+            padding: 22px 22px 18px 22px;
+            color: #F8FAFC;
+            background: linear-gradient(135deg, #091534 0%, #16337A 45%, #0B63B8 82%, #0284C7 100%);
+            border: 1px solid rgba(56, 189, 248, 0.45);
+            box-shadow: 0 14px 34px rgba(14, 165, 233, 0.35), inset 0 1px 0 rgba(255,255,255,0.22);
+            overflow: hidden;
+            min-height: 218px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }}
+        .shimmer {{
+            position: absolute; top: -50%; left: -60%; width: 45%; height: 220%;
+            background: linear-gradient(115deg, transparent 20%, rgba(255,255,255,0.16) 50%, transparent 80%);
+            transform: rotate(22deg);
+            animation: sweep 5.5s infinite ease-in-out;
+            pointer-events: none;
+        }}
+        @keyframes sweep {{
+            0% {{ left: -70%; }}
+            45% {{ left: 140%; }}
+            100% {{ left: 140%; }}
+        }}
+        .eagle-bg {{
+            position: absolute; right: -12px; bottom: -16px;
+            width: 175px; height: 175px; opacity: 0.16;
+            pointer-events: none;
+            animation: floatWing 4.5s ease-in-out infinite;
+        }}
+        @keyframes floatWing {{
+            0%, 100% {{ transform: translateY(0px) scale(1); }}
+            50% {{ transform: translateY(-5px) scale(1.03); }}
+        }}
+        .glow-orb {{
+            position: absolute; top: -40px; right: -30px;
+            width: 150px; height: 150px; border-radius: 50%;
+            background: radial-gradient(circle, rgba(250, 204, 21, 0.25) 0%, transparent 70%);
+            pointer-events: none;
+        }}
+        .top-row {{
+            display: flex; justify-content: space-between; align-items: center;
+            position: relative; z-index: 2;
+        }}
+        .brand {{
+            display: flex; align-items: center; gap: 10px;
+        }}
+        .crest {{
+            width: 38px; height: 38px; border-radius: 12px;
+            background: linear-gradient(135deg, rgba(250,204,21,0.22), rgba(56,189,248,0.22));
+            border: 1px solid rgba(250,204,21,0.45);
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 0 14px rgba(250,204,21,0.25);
+        }}
+        .brand-text .title {{
+            font-size: 13px; font-weight: 700; letter-spacing: 0.6px; color: #E0F2FE;
+            text-transform: uppercase;
+        }}
+        .brand-text .sub {{
+            font-size: 11px; color: #93C5FD; margin-top: 1px;
+        }}
+        .eye-btn {{
+            background: rgba(15, 23, 42, 0.45);
+            border: 1px solid rgba(148, 163, 184, 0.35);
+            color: #E0F2FE; border-radius: 999px;
+            padding: 6px 12px; font-size: 11px; font-weight: 600;
+            cursor: pointer; display: flex; align-items: center; gap: 6px;
+            backdrop-filter: blur(6px); transition: all 0.2s ease;
+        }}
+        .eye-btn:hover {{ background: rgba(56, 189, 248, 0.25); border-color: #38BDF8; }}
+        .mid-row {{
+            position: relative; z-index: 2; margin: 16px 0 14px 0;
+        }}
+        .bal-label {{
+            font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
+            color: #BAE6FD; opacity: 0.9; margin-bottom: 4px;
+        }}
+        .bal-value {{
+            font-size: 32px; font-weight: 800; letter-spacing: -0.5px;
+            background: linear-gradient(90deg, #FFFFFF 0%, #E0F2FE 65%, #FDE047 100%);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            text-shadow: 0 2px 12px rgba(0,0,0,0.18);
+        }}
+        .bot-row {{
+            display: flex; justify-content: space-between; align-items: center;
+            padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.18);
+            position: relative; z-index: 2; font-size: 11px; color: #DBEAFE;
+        }}
+        .pill {{
+            background: linear-gradient(135deg, rgba(250,204,21,0.2), rgba(56,189,248,0.22));
+            border: 1px solid rgba(250,204,21,0.4);
+            color: #FEF08A; padding: 4px 10px; border-radius: 999px;
+            font-weight: 700; font-size: 10px; letter-spacing: 0.5px;
+        }}
+    </style>
+    </head>
+    <body>
+    <div class="eagle-card">
+        <div class="shimmer"></div>
+        <div class="glow-orb"></div>
+
+        <!-- Custom SVG Elang Sayap Terbentang (Watermark) -->
+        <svg class="eagle-bg" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M100 32 C112 22, 130 24, 138 36 C126 36, 120 42, 118 50 C142 38, 174 34, 194 44 C174 58, 152 68, 132 72 C154 74, 174 82, 186 94 C162 98, 140 96, 120 90 C134 104, 142 122, 142 142 C126 130, 114 116, 106 100 L100 168 L94 100 C86 116, 74 130, 58 142 C58 122, 66 104, 80 90 C60 96, 38 98, 14 94 C26 82, 46 74, 68 72 C48 68, 26 58, 6 44 C26 34, 58 38, 82 50 C80 42, 74 36, 62 36 C70 24, 88 22, 100 32 Z" fill="url(#eagleGrad)"/>
+            <defs>
+                <linearGradient id="eagleGrad" x1="0" y1="0" x2="200" y2="200" gradientUnits="userSpaceOnUse">
+                    <stop offset="0%" stop-color="#FACC15"/>
+                    <stop offset="100%" stop-color="#38BDF8"/>
+                </linearGradient>
+            </defs>
+        </svg>
+
+        <div class="top-row">
+            <div class="brand">
+                <div class="crest">
+                    <!-- Custom SVG Kepala Elang -->
+                    <svg width="24" height="24" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M14 48 C14 28, 26 14, 44 12 C40 17, 39 21, 41 25 C49 24, 55 27, 58 33 C51 32, 46 34, 43 38 C46 41, 46 47, 41 51 C34 48, 26 48, 14 48 Z" fill="#FACC15"/>
+                        <path d="M44 27 C49 27, 54 29, 57 33 C52 33, 47 35, 44 38 L39 33 Z" fill="#F59E0B"/>
+                        <circle cx="35" cy="24" r="2.6" fill="#0F172A"/>
+                    </svg>
+                </div>
+                <div class="brand-text">
+                    <div class="title">Dompet Elang</div>
+                    <div class="sub">{safe_owner} · {safe_role}</div>
+                </div>
+            </div>
+            <button class="eye-btn" id="toggleBtn" onclick="toggleBalance()">
+                <span id="eyeLabel">Sembunyikan</span>
+            </button>
+        </div>
+
+        <div class="mid-row">
+            <div class="bal-label">Total Saldo Gaji</div>
+            <div class="bal-value" id="balText">Rp 0</div>
+        </div>
+
+        <div class="bot-row">
+            <span>{wib_now_txt}</span>
+            <span class="pill">ELANG GOLD</span>
+        </div>
+    </div>
+
+    <script>
+        const target = {bal_int};
+        let hidden = false;
+        const balEl = document.getElementById("balText");
+        const eyeLabel = document.getElementById("eyeLabel");
+
+        function fmtRp(val) {{
+            return "Rp " + Number(val).toLocaleString("id-ID");
+        }}
+
+        function animateValue(start, end, duration) {{
+            const startTime = performance.now();
+            function frame(now) {{
+                const progress = Math.min((now - startTime) / duration, 1);
+                const eased = 1 - Math.pow(1 - progress, 3);
+                const current = Math.round(start + (end - start) * eased);
+                if (!hidden) balEl.textContent = fmtRp(current);
+                if (progress < 1) requestAnimationFrame(frame);
+            }}
+            requestAnimationFrame(frame);
+        }}
+
+        function toggleBalance() {{
+            hidden = !hidden;
+            if (hidden) {{
+                balEl.textContent = "Rp ••••••••";
+                eyeLabel.textContent = "Tampilkan";
+            }} else {{
+                balEl.textContent = fmtRp(target);
+                eyeLabel.textContent = "Sembunyikan";
+            }}
+        }}
+
+        animateValue(0, target, 750);
+    </script>
+    </body>
+    </html>
+    """
+    components.html(card_html, height=238, scrolling=False)
 
 
 # ==========================================
@@ -787,10 +1022,58 @@ if _pending_tok:
 user = next((u for u in worker.data["users"] if u["uid"] == st.session_state.user["uid"]), st.session_state.user)
 st.session_state.user = user
 
+
+# ==========================================
+# 3B. POPUP MODAL UNTUK KARYAWAN
+# ==========================================
+@st.dialog("📢 Pengumuman Dari Admin")
+def show_employee_popups(active_popups, current_user):
+    for idx, p in enumerate(active_popups):
+        if idx > 0:
+            st.divider()
+        if p.get("title"):
+            st.subheader(p["title"])
+        if p.get("image_key"):
+            img_url = worker.media_link(p["image_key"])
+            if img_url:
+                st.image(img_url, use_container_width=True)
+        if p.get("message"):
+            st.write(p["message"])
+        st.caption(f"Berakhir otomatis dalam: **{fmt_remaining(p.get('expires_at', ''))}** (s.d. {p.get('expires_at', '-')[:16].replace('T', ' ')} WIB)")
+
+    st.write("")
+    if st.button("Mengerti / Tutup", type="primary", use_container_width=True, icon=":material/check_circle:", key="btn_close_popup_modal"):
+        closed_sess = st.session_state.setdefault("closed_popups_session", set())
+        changed = False
+        for p in active_popups:
+            closed_sess.add(p["id"])
+            if p.get("allow_dismiss", True):
+                dismissed = p.setdefault("dismissed_by", [])
+                if current_user["uid"] not in dismissed:
+                    dismissed.append(current_user["uid"])
+                    changed = True
+        if changed:
+            save_key_sync("popups.json")
+        st.rerun()
+
+if user["role"] == "karyawan":
+    now_iso = now_wib().isoformat()
+    closed_sess = st.session_state.get("closed_popups_session", set())
+    visible_popups = [
+        p for p in worker.data.get("popups", [])
+        if (not p.get("expires_at") or now_iso <= p["expires_at"])
+        and p.get("target") in ("all", user["name"])
+        and p["id"] not in closed_sess
+        and (not p.get("allow_dismiss", True) or user["uid"] not in p.get("dismissed_by", []))
+    ]
+    if visible_popups:
+        show_employee_popups(visible_popups, user)
+
+
 st.markdown(
-    "<div style='text-align: center; margin-bottom: 20px; "
+    "<div style='text-align: center; margin-bottom: 16px; "
     "filter: drop-shadow(0 0 15px rgba(59, 130, 246, 0.6));'>"
-    "<img src='https://cdn.aceimg.com/mD4NlOxLG.png' width='70'></div>",
+    "<img src='https://cdn.aceimg.com/mD4NlOxLG.png' width='66'></div>",
     unsafe_allow_html=True
 )
 
@@ -834,7 +1117,7 @@ with st.container(key="nav_bottom"):
 
 
 # ==========================================
-# 5. HALAMAN AKUN
+# 5. HALAMAN AKUN (TANPA WITHDRAW, KARTU SALDO ELANG SVG+JS)
 # ==========================================
 if page == "Akun":
     st.markdown(f"""
@@ -848,34 +1131,18 @@ if page == "Akun":
     """, unsafe_allow_html=True)
 
     my_payroll = worker.data["payroll"].get(user["name"], 0)
-    pending_wd = sum(
-        r["amount"] for r in worker.data["reports"]["wd"]
-        if r["user"] == user["name"] and r.get("status", "pending") == "pending"
-    )
-    available = max(my_payroll - pending_wd, 0)
-
-    st.markdown(f"""
-    <div class="wallet-card">
-        <div class="wallet-header">{svg('package', 18)}<span>Dompet Elang</span></div>
-        <div class="wallet-balance">{fmt_rp(my_payroll)}</div>
-        <div class="wallet-footer">
-            <span>Tersedia: <b>{fmt_rp(available)}</b></span>
-            <span class="wallet-badge">Aktif</span>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    if st.button("Withdraw", use_container_width=True, type="primary", icon=":material/account_balance_wallet:"):
-        st.session_state.show_withdraw = not st.session_state.get("show_withdraw", False)
+    role_txt = "Administrator" if user["role"] == "admin" else "Karyawan ElangPintar"
+    render_eagle_wallet_card(my_payroll, role_txt, user["name"])
 
     tg_raw = user.get("telegram", "").strip().lstrip("@")
     tg_display = f"@{tg_raw}" if tg_raw else "Belum diatur"
     tg_color = "#22C55E" if tg_raw else "#F59E0B"
+    notif_count = len(user.get("notifications", []))
 
     st.markdown(f"""
     <div class="list-item">
         <div class="list-item-left">{svg('bell', 20)}<span>Notifikasi</span></div>
-        <span style="color: #64748B;">&gt;</span>
+        <span style="color: #94A3B8;">{notif_count} pesan &gt;</span>
     </div>
     <div class="list-item">
         <div class="list-item-left">{svg('link', 20, '#3B82F6')}<span>Telegram</span></div>
@@ -915,6 +1182,10 @@ if page == "Akun":
                         if old_name in worker.data["db_stats"]:
                             worker.data["db_stats"][new_name_clean] = worker.data["db_stats"].pop(old_name)
                             save_key_sync("db_stats.json")
+                        for p in worker.data.get("popups", []):
+                            if p.get("target") == old_name:
+                                p["target"] = new_name_clean
+                        save_key_sync("popups.json")
                         for k in ["ndp", "wd", "video"]:
                             for r in worker.data["reports"][k]:
                                 if r["user"] == old_name: r["user"] = new_name_clean
@@ -932,61 +1203,12 @@ if page == "Akun":
 
         st.session_state.pop("user", None)
         st.session_state.pop("session_token", None)
+        st.session_state.pop("closed_popups_session", None)
         st.session_state.pop("_pending_cookie_set", None)
         st.session_state.pop("_cookie_set_tries", None)
         st.session_state["_pending_cookie_delete"] = True
         st.session_state["_cookie_del_tries"] = 0
         st.rerun()
-
-    if st.session_state.get("show_withdraw", False):
-        st.divider()
-        st.subheader("Pengaturan Rekening & Withdraw")
-        accounts = user.get("accounts", [])
-        if not accounts:
-            st.warning("Anda belum memiliki rekening. Tambahkan dulu di bawah.")
-        else:
-            st.write("**Rekening Terdaftar:**")
-            for i, a in enumerate(accounts):
-                c1, c2 = st.columns([4, 1])
-                c1.write(f"{i+1}. **{a['bank']}** — `{a['number']}` a.n. {a['name']}")
-                if c2.button("Hapus", key=f"delacc_{i}", icon=":material/delete:"):
-                    accounts.pop(i)
-                    user["accounts"] = accounts
-                    save_users()
-                    st.rerun()
-
-            st.info(f"Saldo Tersedia: **{fmt_rp(available)}** (Pending: {fmt_rp(pending_wd)})")
-
-            labels = [f"{a['bank']} - {a['number']}" for a in accounts]
-            sel = st.selectbox("Pilih Rekening Tujuan", range(len(accounts)), format_func=lambda i: labels[i])
-
-            if st.button("Ajukan Withdraw", type="primary", use_container_width=True):
-                if available <= 0:
-                    st.error("Tidak ada saldo yang bisa ditarik.")
-                else:
-                    worker.data["reports"]["wd"].append({
-                        "user": user["name"], "amount": available,
-                        "account": accounts[sel], "status": "pending",
-                        "time": str(now_wib())
-                    })
-                    save_key("reports.json")
-                    st.success(f"Pengajuan withdraw {fmt_rp(available)} terkirim!")
-                    st.session_state.show_withdraw = False
-                    st.rerun()
-
-        with st.expander("Tambah Rekening Baru"):
-            with st.form("add_account_form"):
-                bank = st.text_input("Jenis Bank / E-Wallet (BCA, Dana, dll)")
-                number = st.text_input("Nomor Rekening")
-                holder = st.text_input("Nama Pemilik Rekening")
-                if st.form_submit_button("Simpan Rekening", icon=":material/save:"):
-                    if bank and number and holder:
-                        user.setdefault("accounts", []).append({"bank": bank, "number": number, "name": holder})
-                        save_users()
-                        st.success("Rekening ditambahkan!")
-                        st.rerun()
-                    else:
-                        st.error("Semua field wajib diisi.")
 
 
 # ==========================================
@@ -995,7 +1217,7 @@ if page == "Akun":
 elif user["role"] == "admin":
     if page == "Employee":
         st.header("Manajemen Karyawan")
-        tab1, tab2, tab3, tab4 = st.tabs(["Buat Akun", "Kelola", "GiveDB", "SetText"])
+        tab1, tab2, tab3, tab4, tab5 = st.tabs(["Buat Akun", "Kelola", "GiveDB", "SetText", "PopUp"])
 
         with tab1:
             name = st.text_input("Nama Karyawan Baru")
@@ -1054,24 +1276,14 @@ elif user["role"] == "admin":
         with tab3:
             karyawan_list = [u["name"] for u in worker.data["users"] if u["role"] == "karyawan"]
             if karyawan_list:
-                st.info("Database dikirim secara privat — hanya karyawan terpilih yang bisa melihat. "
+                st.info("Database dikirimkan"
                         "Format: **1 baris = 1 DB** — `DB Nama` (pisahkan DB dan nama dengan spasi).")
                 target = st.selectbox("Pilih Karyawan", karyawan_list, key="givedb_target")
 
                 existing_db = next((d for d in worker.data["databases"] if d["name"] == target), None)
                 replace_mode = "replace_drop"
                 if existing_db and existing_db.get("numbers"):
-                    st.markdown(
-                        svg_box(
-                            "alert",
-                            f"<b>{html.escape(target)}</b> saat ini masih memiliki "
-                            f"<b>{len(existing_db['numbers'])} DB aktif</b>.",
-                            bg="rgba(245, 158, 11, 0.14)",
-                            border="#F59E0B",
-                            color="#FBBF24",
-                        ),
-                        unsafe_allow_html=True,
-                    )
+                    st.warning(f"⚠️ **{target}** saat ini masih memiliki **{len(existing_db['numbers'])} DB aktif**.")
                     replace_mode = st.radio(
                         "Perlakuan terhadap DB lama saat mengirim DB baru:",
                         [
@@ -1125,7 +1337,6 @@ elif user["role"] == "admin":
                                 "numbers": parsed
                             })
 
-                        # ==== NOTIFIKASI OTOMATIS KE KARYAWAN ====
                         target_u = next((u for u in worker.data["users"] if u["name"] == target), None)
                         if target_u:
                             target_u.setdefault("notifications", []).append({
@@ -1137,7 +1348,7 @@ elif user["role"] == "admin":
                             save_users_sync()
 
                         save_key_sync("databases.json")
-                        st.success(f"{len(parsed)} DB dikirim privat ke {target}. Notifikasi terkirim.", icon=":material/check_circle:")
+                        st.success(f"✅ {len(parsed)} DB dikirim privat ke {target}. Notifikasi terkirim.")
                         st.rerun()
 
                 st.divider()
@@ -1200,56 +1411,198 @@ elif user["role"] == "admin":
                                     notify=notify_emp
                                 )
                                 st.success(
-                                    f"{count_rev} DB milik {rev_target} berhasil ditarik "
-                                    f"({'statistik dipertahankan' if keep_stats else 'pengaruh DB dihapus dari statistik'}).",
-                                    icon=":material/check_circle:"
+                                    f"✅ {count_rev} DB milik {rev_target} berhasil ditarik "
+                                    f"({'statistik dipertahankan' if keep_stats else 'pengaruh DB dihapus dari statistik'})."
                                 )
                                 st.rerun()
             else:
                 st.info("Belum ada karyawan.")
 
         with tab4:
-            st.subheader("Tambah Teks Baru")
+            st.subheader("Tambah Teks & Foto Baru")
+            st.caption("Teks dan foto di sini **tersimpan permanen** (tidak ikut terhapus otomatis harian).")
             with st.form("add_new_text_form"):
                 new_title = st.text_input("Nama / Judul Teks")
-                new_content = st.text_area("Isi Teks", height=150)
-                if st.form_submit_button("Tambah Teks", icon=":material/add:"):
-                    if new_title and new_content:
+                new_content = st.text_area("Isi Teks (opsional jika hanya mengirim foto)", height=140)
+                new_img = st.file_uploader("Upload Foto Pendukung (Opsional - PNG/JPG/WEBP)", type=["png", "jpg", "jpeg", "webp"], key="new_text_img")
+                if st.form_submit_button("Tambah Teks / Foto", icon=":material/add:"):
+                    if not new_title.strip():
+                        st.error("Judul tidak boleh kosong.")
+                    elif not new_content.strip() and new_img is None:
+                        st.error("Isi minimal teks atau upload foto.")
+                    else:
+                        img_key = None
+                        if new_img is not None:
+                            res_key = worker.execute(worker.upload_image_s3, new_img, new_img.name)
+                            if isinstance(res_key, Exception) or not str(res_key).startswith("images/"):
+                                st.error(f"Gagal upload foto: {res_key}")
+                                st.stop()
+                            img_key = res_key
                         worker.data["texts"].append({
                             "id": uuid.uuid4().hex,
-                            "title": new_title,
-                            "content": new_content
+                            "title": new_title.strip(),
+                            "content": new_content,
+                            "image_key": img_key,
+                            "created_at": str(now_wib())
                         })
-                        save_key("texts.json")
-                        st.success("Teks berhasil ditambahkan!", icon=":material/check_circle:")
+                        save_key_sync("texts.json")
+                        st.success("Teks / Foto berhasil ditambahkan!")
                         st.rerun()
-                    else:
-                        st.error("Judul dan Isi Teks tidak boleh kosong.")
 
             st.divider()
-            st.subheader("Daftar Teks Tersimpan")
+            st.subheader("Daftar Teks & Foto Tersimpan")
             if not worker.data["texts"]:
                 st.info("Belum ada teks yang tersimpan.")
             else:
                 for idx, t in enumerate(worker.data["texts"]):
-                    with st.expander(t["title"], icon=":material/description:"):
+                    has_img = " 🖼️" if t.get("image_key") else ""
+                    with st.expander(f"📄 {t['title']}{has_img}"):
+                        if t.get("image_key"):
+                            cur_url = worker.media_link(t["image_key"])
+                            if cur_url:
+                                st.image(cur_url, use_container_width=True)
                         with st.form(f"edit_form_{t['id']}"):
                             edit_title = st.text_input("Edit Judul", value=t["title"])
-                            edit_content = st.text_area("Edit Isi Teks", value=t["content"], height=150)
+                            edit_content = st.text_area("Edit Isi Teks", value=t.get("content", ""), height=140)
+                            replace_img = st.file_uploader("Ganti / Tambah Foto (Opsional)", type=["png", "jpg", "jpeg", "webp"], key=f"rep_img_{t['id']}")
+                            remove_img = st.checkbox("Hapus foto saat ini", value=False, key=f"rm_img_{t['id']}") if t.get("image_key") else False
 
                             c1, c2 = st.columns(2)
                             if c1.form_submit_button("Simpan Perubahan", use_container_width=True, icon=":material/save:"):
-                                t["title"] = edit_title
+                                t["title"] = edit_title.strip() or t["title"]
                                 t["content"] = edit_content
-                                save_key("texts.json")
+                                if replace_img is not None:
+                                    res_key = worker.execute(worker.upload_image_s3, replace_img, replace_img.name)
+                                    if not isinstance(res_key, Exception) and str(res_key).startswith("images/"):
+                                        if t.get("image_key"):
+                                            worker.execute(worker.delete_media_s3, t["image_key"])
+                                        t["image_key"] = res_key
+                                    else:
+                                        st.error(f"Gagal upload foto: {res_key}")
+                                elif remove_img and t.get("image_key"):
+                                    worker.execute(worker.delete_media_s3, t["image_key"])
+                                    t["image_key"] = None
+                                save_key_sync("texts.json")
                                 st.toast("Teks diperbarui!")
                                 st.rerun()
 
                             if c2.form_submit_button("Hapus Teks", type="primary", use_container_width=True, icon=":material/delete:"):
+                                if t.get("image_key"):
+                                    worker.execute(worker.delete_media_s3, t["image_key"])
                                 worker.data["texts"].pop(idx)
-                                save_key("texts.json")
+                                save_key_sync("texts.json")
                                 st.toast("Teks dihapus!")
                                 st.rerun()
+
+        with tab5:
+            st.subheader("Kirim PopUp ke Karyawan")
+            st.caption("PopUp langsung muncul sebagai jendela pengumuman di layar karyawan dan otomatis terhapus saat waktu berakhir.")
+
+            karyawan_list = [u["name"] for u in worker.data["users"] if u["role"] == "karyawan"]
+            target_options = ["all"] + karyawan_list
+
+            p_target = st.selectbox(
+                "Target Penerima",
+                target_options,
+                format_func=lambda x: "Semua Karyawan" if x == "all" else x,
+                key="popup_target_sel"
+            )
+            p_title = st.text_input("Judul PopUp", placeholder="Contoh: Promo / Arahan Penting Hari Ini", key="popup_title_in")
+            p_msg = st.text_area("Pesan PopUp (opsional jika hanya kirim foto)", height=120, key="popup_msg_in")
+            p_img = st.file_uploader("Foto PopUp (Opsional - PNG/JPG/WEBP)", type=["png", "jpg", "jpeg", "webp"], key="popup_img_in")
+
+            dur_mode = st.radio(
+                "Waktu Hapus Otomatis",
+                ["Durasi Cepat", "Tanggal & Jam Spesifik (WIB)"],
+                horizontal=True,
+                key="popup_dur_mode"
+            )
+
+            now_dt = now_wib()
+            if dur_mode == "Durasi Cepat":
+                dur_choices = {
+                    "15 Menit": timedelta(minutes=15),
+                    "1 Jam": timedelta(hours=1),
+                    "3 Jam": timedelta(hours=3),
+                    "6 Jam": timedelta(hours=6),
+                    "12 Jam": timedelta(hours=12),
+                    "24 Jam": timedelta(hours=24),
+                    "3 Hari": timedelta(days=3),
+                    "7 Hari": timedelta(days=7),
+                }
+                sel_dur = st.selectbox("Tampilkan Selama", list(dur_choices.keys()), index=3, key="popup_dur_preset")
+                expires_dt = now_dt + dur_choices[sel_dur]
+            else:
+                dc1, dc2 = st.columns(2)
+                exp_date = dc1.date_input("Tanggal Berakhir", value=now_dt.date(), min_value=now_dt.date(), key="popup_exp_date")
+                default_time = (now_dt + timedelta(hours=2)).time().replace(second=0, microsecond=0)
+                exp_time = dc2.time_input("Jam Berakhir (WIB)", value=default_time, key="popup_exp_time")
+                expires_dt = datetime.combine(exp_date, exp_time)
+
+            allow_dismiss = st.checkbox(
+                "Izinkan karyawan menutup permanen (jika tidak dicentang, popup hanya tertutup per sesi & muncul lagi saat refresh sampai waktu habis)",
+                value=True,
+                key="popup_allow_dismiss"
+            )
+
+            if st.button("Kirim PopUp Sekarang", type="primary", use_container_width=True, icon=":material/campaign:", key="btn_send_popup"):
+                if not p_title.strip() and not p_msg.strip() and p_img is None:
+                    st.error("Isi minimal judul, pesan, atau upload foto.")
+                elif expires_dt <= now_wib():
+                    st.error("Waktu berakhir harus lebih besar dari waktu sekarang (WIB).")
+                else:
+                    img_key = None
+                    if p_img is not None:
+                        res_key = worker.execute(worker.upload_image_s3, p_img, p_img.name)
+                        if isinstance(res_key, Exception) or not str(res_key).startswith("images/"):
+                            st.error(f"Gagal upload foto popup: {res_key}")
+                            st.stop()
+                        img_key = res_key
+
+                    worker.data["popups"].append({
+                        "id": uuid.uuid4().hex,
+                        "title": p_title.strip() or "Pengumuman Admin",
+                        "message": p_msg.strip(),
+                        "image_key": img_key,
+                        "target": p_target,
+                        "allow_dismiss": allow_dismiss,
+                        "dismissed_by": [],
+                        "created_at": now_wib().isoformat(),
+                        "expires_at": expires_dt.isoformat()
+                    })
+                    save_key_sync("popups.json")
+                    st.success(f"✅ PopUp aktif sampai {expires_dt.strftime('%d %b %Y %H:%M WIB')}!")
+                    st.rerun()
+
+            st.divider()
+            st.subheader("Daftar PopUp Aktif")
+            worker.cleanup_expired_popups()
+            active_popups_list = worker.data.get("popups", [])
+            if not active_popups_list:
+                st.info("Tidak ada PopUp aktif saat ini.")
+            else:
+                for p_idx, p in enumerate(list(active_popups_list)):
+                    tgt_lbl = "Semua Karyawan" if p.get("target") == "all" else p.get("target", "-")
+                    rem_lbl = fmt_remaining(p.get("expires_at", ""))
+                    with st.expander(f" {p.get('title','PopUp')} → {tgt_lbl} (Sisa: {rem_lbl})"):
+                        if p.get("image_key"):
+                            p_url = worker.media_link(p["image_key"])
+                            if p_url:
+                                st.image(p_url, use_container_width=True)
+                        if p.get("message"):
+                            st.write(p["message"])
+                        st.caption(
+                            f"Dibuat: {p.get('created_at','-')[:16].replace('T',' ')} WIB · "
+                            f"Berakhir: {p.get('expires_at','-')[:16].replace('T',' ')} WIB · "
+                            f"Sudah ditutup permanen oleh: {len(p.get('dismissed_by', []))} user"
+                        )
+                        if st.button("Hentikan & Hapus PopUp", key=f"del_pop_{p['id']}", type="primary", icon=":material/delete:"):
+                            if p.get("image_key"):
+                                worker.execute(worker.delete_media_s3, p["image_key"])
+                            worker.data["popups"] = [x for x in worker.data["popups"] if x["id"] != p["id"]]
+                            save_key_sync("popups.json")
+                            st.success("PopUp dihentikan dan dihapus.")
+                            st.rerun()
 
 
     elif page == "Payroll":
@@ -1354,18 +1707,14 @@ elif user["role"] == "admin":
             )
 
             if pres_total > 0:
-                st.markdown(
-                    svg_box(
-                        "chart",
-                        f"Termasuk <b>{pres_total} DB yang telah dicabut</b> (statistik dipertahankan): "
-                        f"Dicek <b>{pres_done}</b>, Dibalas <b>{pres_dibalas}</b>."
-                    ),
-                    unsafe_allow_html=True,
+                st.info(
+                    f"📊 Termasuk **{pres_total} DB yang telah dicabut** (statistik dipertahankan): "
+                    f"Dicek **{pres_done}**, Dibalas **{pres_dibalas}**."
                 )
                 if st.button("Hapus Pengaruh DB Tarikan dari Statistik", key=f"clr_pres_{selected}", icon=":material/delete_sweep:"):
                     worker.data["db_stats"].pop(selected, None)
                     save_key_sync("db_stats.json")
-                    st.success("Pengaruh DB tarikan dihapus dari statistik.", icon=":material/check_circle:")
+                    st.success("Pengaruh DB tarikan dihapus dari statistik.")
                     st.rerun()
 
             if (my_db and my_db.get("numbers")) or pres_total > 0:
@@ -1392,44 +1741,16 @@ elif user["role"] == "admin":
                     filtered = [n for n in my_db["numbers"] if n.get("status", "Belum Dicek") in filter_st]
 
                     if filtered:
-                        status_badge_colors = {
-                            "Belum Dicek":     ("#334155", "#CBD5E1"),
-                            "Tidak Terdaftar": ("#451A03", "#FBBF24"),
-                            "Terdaftar":       ("#1E3A8A", "#93C5FD"),
-                            "Dibaca":          ("#164E63", "#67E8F9"),
-                            "Dibalas":         ("#064E3B", "#34D399"),
-                        }
-                        tr_html = []
-                        for idx, n in enumerate(filtered, 1):
-                            stt_val = n.get("status", "Belum Dicek")
-                            bg, fg = status_badge_colors.get(stt_val, ("#1E293B", "#E2E8F0"))
-                            num_esc = html.escape(str(n.get("num", "-")))
-                            name_esc = html.escape(str(n.get("name") or "-"))
-                            stt_esc = html.escape(str(stt_val))
-                            tr_html.append(
-                                f"<tr style='border-bottom:1px solid #1E3A8A;'>"
-                                f"<td style='padding:8px 10px;color:#94A3B8;'>{idx}</td>"
-                                f"<td style='padding:8px 10px;color:#F8FAFC;font-family:monospace;'>{num_esc}</td>"
-                                f"<td style='padding:8px 10px;color:#E2E8F0;'>{name_esc}</td>"
-                                f"<td style='padding:8px 10px;'>"
-                                f"<span style='background:{bg};color:{fg};padding:2px 8px;"
-                                f"border-radius:999px;font-size:11px;font-weight:600;white-space:nowrap;'>"
-                                f"{stt_esc}</span></td></tr>"
-                            )
-                        table_html = (
-                            "<div style='overflow-x:auto;border:1px solid #1E3A8A;border-radius:12px;"
-                            "background:#0F172A;margin-bottom:8px;'>"
-                            "<table style='width:100%;border-collapse:collapse;font-size:13px;text-align:left;'>"
-                            "<thead><tr style='background:#1E293B;color:#38BDF8;border-bottom:1px solid #1E3A8A;'>"
-                            "<th style='padding:10px;'>No</th>"
-                            "<th style='padding:10px;'>DB</th>"
-                            "<th style='padding:10px;'>Nama</th>"
-                            "<th style='padding:10px;'>Status</th>"
-                            "</tr></thead><tbody>"
-                            + "".join(tr_html) +
-                            "</tbody></table></div>"
-                        )
-                        st.markdown(table_html, unsafe_allow_html=True)
+                        rows = [
+                            {
+                                "No": idx,
+                                "DB": n["num"],
+                                "Nama": n.get("name") or "-",
+                                "Status": n.get("status", "Belum Dicek"),
+                            }
+                            for idx, n in enumerate(filtered, 1)
+                        ]
+                        st.dataframe(rows, use_container_width=True, hide_index=True)
                         st.caption(f"Menampilkan **{len(filtered)}** dari **{len(my_db['numbers'])}** DB aktif.")
                     else:
                         st.info("Tidak ada DB aktif dengan status yang dipilih.")
@@ -1473,7 +1794,7 @@ elif user["role"] == "admin":
                                     keep_stats=an_keep,
                                     notify=an_notify
                                 )
-                                st.success(f"{count_rev} DB berhasil ditarik.", icon=":material/check_circle:")
+                                st.success(f"✅ {count_rev} DB berhasil ditarik.")
                                 st.rerun()
                 else:
                     st.caption("Saat ini karyawan tidak memiliki DB aktif (hanya statistik DB yang dipertahankan).")
@@ -1636,7 +1957,8 @@ elif user["role"] == "admin":
                                    if _parse_t(v.get("time", "")) >= today_start
                                    and v.get("status", "pending") != "pending"]
                 lalu_items      = [(i, v) for i, v in enumerate(vids)
-                                   if _parse_t(v.get("time", "")) < today_start]
+                                   if _parse_t(v.get("time", "")) < today_start
+                                   and v.get("status", "pending") != "pending"]
 
                 sc1, sc2, sc3, sc4 = st.columns(4)
                 sc1.metric("Total", len(vids))
@@ -1646,11 +1968,12 @@ elif user["role"] == "admin":
 
                 st.divider()
 
-                def render_video(idx, v):
+                def render_video(idx, v, tab_tag):
                     status = v.get("status", "pending")
                     badge_map = {"pending": "[PENDING]", "approved": "[APPROVED]", "rejected": "[REJECTED]"}
                     badge = badge_map.get(status, "[?]")
                     label = f"{badge} {v['user']} · {v.get('caption','-')}"
+                    cd_key = f"cd_{tab_tag}_{idx}"
 
                     with st.expander(label):
                         st.markdown(
@@ -1677,35 +2000,35 @@ elif user["role"] == "admin":
                             st.warning("URL video tidak tersedia.")
 
                         c1, c2, c3 = st.columns(3)
-                        if c1.button("Approve", key=f"av_{idx}",
+                        if c1.button("Approve", key=f"av_{tab_tag}_{idx}",
                                      disabled=(status == "approved"),
                                      use_container_width=True, icon=":material/check_circle:"):
                             vids[idx]["status"] = "approved"
                             save_key("reports.json")
                             st.rerun()
-                        if c2.button("Reject", key=f"rv_{idx}",
+                        if c2.button("Reject", key=f"rv_{tab_tag}_{idx}",
                                      disabled=(status == "rejected"),
                                      use_container_width=True, icon=":material/cancel:"):
                             vids[idx]["status"] = "rejected"
                             save_key("reports.json")
                             st.rerun()
-                        if c3.button("Hapus", key=f"dv_{idx}",
+                        if c3.button("Hapus", key=f"dv_{tab_tag}_{idx}",
                                      use_container_width=True, icon=":material/delete:"):
-                            st.session_state[f"cd_{idx}"] = True
+                            st.session_state[cd_key] = True
 
-                        if st.session_state.get(f"cd_{idx}", False):
+                        if st.session_state.get(cd_key, False):
                             st.error(f"Hapus permanen video **{v.get('caption','-')}**?")
                             y1, y2 = st.columns(2)
-                            if y1.button("Ya, Hapus", key=f"y_{idx}", type="primary", use_container_width=True):
+                            if y1.button("Ya, Hapus", key=f"y_{tab_tag}_{idx}", type="primary", use_container_width=True):
                                 if v.get("key"):
                                     worker.execute(worker.delete_video_s3, v["key"])
                                 vids.pop(idx)
                                 save_key("reports.json")
-                                st.session_state[f"cd_{idx}"] = False
+                                st.session_state[cd_key] = False
                                 st.success("Video dihapus.")
                                 st.rerun()
-                            if y2.button("Batal", key=f"n_{idx}", use_container_width=True):
-                                st.session_state[f"cd_{idx}"] = False
+                            if y2.button("Batal", key=f"n_{tab_tag}_{idx}", use_container_width=True):
+                                st.session_state[cd_key] = False
                                 st.rerun()
 
                 s1, s2, s3 = st.tabs([
@@ -1715,13 +2038,13 @@ elif user["role"] == "admin":
                 ])
                 with s1:
                     if not pending_items: st.success("Tidak ada video pending.")
-                    for idx, v in pending_items: render_video(idx, v)
+                    for idx, v in pending_items: render_video(idx, v, "p")
                 with s2:
                     if not hari_ini_items: st.info("Belum ada video diproses hari ini.")
-                    for idx, v in hari_ini_items: render_video(idx, v)
+                    for idx, v in hari_ini_items: render_video(idx, v, "h")
                 with s3:
                     if not lalu_items: st.info("Tidak ada video lama.")
-                    for idx, v in lalu_items: render_video(idx, v)
+                    for idx, v in lalu_items: render_video(idx, v, "l")
 
 
 # ==========================================
@@ -1740,7 +2063,7 @@ else:
                     unsafe_allow_html=True
                 )
                 for n in unread:
-                    st.write(f"- {html.escape(n['message'])}  \n  <span style='color:#64748B;font-size:11px;'>{html.escape(str(n.get('time','')))}</span>",
+                    st.write(f"- {n['message']}  \n  <span style='color:#64748B;font-size:11px;'>{n.get('time','')}</span>",
                              unsafe_allow_html=True)
                 if st.button("Tandai Dibaca", use_container_width=True, icon=":material/done_all:"):
                     for n in user.get("notifications", []):
@@ -1851,7 +2174,7 @@ else:
                             "time": str(now_wib())
                         })
                         save_key("reports.json")
-                    st.success("Pengajuan NDP dan Video berhasil dikirim!", icon=":material/check_circle:")
+                    st.success("Pengajuan NDP dan Video berhasil dikirim!")
                     st.balloons()
                     st.rerun()
                 except Exception as e:
@@ -1920,28 +2243,33 @@ else:
                             "time": str(now_wib())
                         })
                         save_key("reports.json")
-                    st.success("Video berhasil diupload!", icon=":material/check_circle:")
+                    st.success("Video berhasil diupload!")
                     st.rerun()
                 except Exception as e:
                     st.error(f"Upload gagal: {e}")
 
     elif page == "Teks":
-        st.header("Teks Kerja")
+        st.header("Teks & Materi Kerja")
 
         if not worker.data["texts"]:
-            st.info("Belum ada teks kerja dari Admin.")
+            st.info("Belum ada teks / materi dari Admin.")
         else:
             for t in worker.data["texts"]:
-                st.markdown(
-                    f"<h3 style='margin-bottom:6px;'>{svg('file', 20)} "
-                    f"<span style='vertical-align:middle;'>{html.escape(t['title'])}</span></h3>",
-                    unsafe_allow_html=True,
-                )
-                st.code(t['content'], language="text")
-                st.markdown(
-                    f"<p style='font-size:12px;color:#94A3B8;margin-top:-6px;'>"
-                    f"{svg('copy', 14, '#94A3B8')} <span style='vertical-align:middle;'>"
-                    f"<i>Klik ikon copy di pojok kanan atas kotak untuk menyalin teks.</i></span></p>",
-                    unsafe_allow_html=True,
-                )
-                st.write("")
+                with st.container(border=True):
+                    st.subheader(f" {t['title']}")
+                    if t.get("image_key"):
+                        img_url = worker.media_link(t["image_key"])
+                        if img_url:
+                            st.image(img_url, use_container_width=True)
+                            st.markdown(
+                                f"<a href='{img_url}' target='_blank' "
+                                f"style='display:inline-block;padding:6px 14px;"
+                                f"background:linear-gradient(135deg,#1E40AF,#3B82F6);"
+                                f"color:white;border-radius:8px;text-decoration:none;"
+                                f"font-size:12px;font-weight:600;margin-bottom:8px;'>"
+                                f"{svg('download', 12, 'white')} Download / Buka Foto</a>",
+                                unsafe_allow_html=True
+                            )
+                    if t.get("content"):
+                        st.code(t["content"], language="text")
+                        st.caption(" *Klik ikon copy di pojok kanan atas kotak untuk menyalin teks.*")
