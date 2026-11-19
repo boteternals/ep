@@ -1046,7 +1046,7 @@ user = next((u for u in worker.data["users"] if u["uid"] == st.session_state.use
 st.session_state.user = user
 
 
-@st.dialog("Pengumuman Dari Admin")
+@st.dialog("Pengumuman Dari Administator")
 def show_employee_popups(active_popups, current_user):
     for idx, p in enumerate(active_popups):
         if idx > 0:
