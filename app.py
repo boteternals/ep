@@ -1,5 +1,4 @@
 import streamlit as st
-import streamlit.components.v1 as components
 import boto3
 import json
 import hashlib
@@ -120,27 +119,127 @@ st.markdown("""
 
     .st-key-eagle_wallet_box {
         position: relative !important;
+        gap: 0 !important;
         margin-bottom: 10px !important;
     }
+    .eagle-card {
+        position: relative;
+        border-radius: 24px;
+        padding: 22px 22px 18px 22px;
+        color: #F0F9FF;
+        background: linear-gradient(135deg, #061333 0%, #0F2B6B 42%, #1D4ED8 78%, #0284C7 100%);
+        border: 1px solid rgba(56, 189, 248, 0.55);
+        box-shadow: 0 14px 34px rgba(14, 165, 233, 0.35), inset 0 1px 0 rgba(186, 230, 253, 0.25);
+        overflow: hidden;
+        min-height: 215px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    }
+    .st-key-eagle_wallet_box:hover .eagle-card {
+        border-color: #7DD3FC;
+        box-shadow: 0 16px 38px rgba(56, 189, 248, 0.48), inset 0 1px 0 rgba(186, 230, 253, 0.35);
+        transform: translateY(-1px);
+    }
+    .eagle-shimmer {
+        position: absolute; top: -50%; left: -60%; width: 45%; height: 220%;
+        background: linear-gradient(115deg, transparent 20%, rgba(186, 230, 253, 0.2) 50%, transparent 80%);
+        transform: rotate(22deg);
+        animation: eagleSweep 5.5s infinite ease-in-out;
+        pointer-events: none;
+    }
+    @keyframes eagleSweep {
+        0% { left: -70%; }
+        45% { left: 140%; }
+        100% { left: 140%; }
+    }
+    .eagle-bg-svg {
+        position: absolute; right: -10px; bottom: -14px;
+        width: 178px; height: 178px; opacity: 0.18;
+        pointer-events: none;
+        animation: eagleFloat 4.5s ease-in-out infinite;
+    }
+    @keyframes eagleFloat {
+        0%, 100% { transform: translateY(0px) scale(1); }
+        50% { transform: translateY(-5px) scale(1.03); }
+    }
+    .eagle-glow-orb {
+        position: absolute; top: -45px; right: -30px;
+        width: 165px; height: 165px; border-radius: 50%;
+        background: radial-gradient(circle, rgba(56, 189, 248, 0.35) 0%, transparent 70%);
+        pointer-events: none;
+    }
+    .eagle-top-row {
+        display: flex; justify-content: space-between; align-items: center;
+        position: relative; z-index: 2;
+    }
+    .eagle-brand { display: flex; align-items: center; gap: 10px; }
+    .eagle-crest {
+        width: 42px; height: 42px; border-radius: 50%;
+        background: radial-gradient(circle at center, rgba(56,189,248,0.28), rgba(15,23,42,0.85));
+        border: 1.5px solid rgba(56, 189, 248, 0.65);
+        display: flex; align-items: center; justify-content: center;
+        box-shadow: 0 0 16px rgba(56, 189, 248, 0.35);
+    }
+    .eagle-title {
+        font-size: 13px; font-weight: 800; letter-spacing: 0.8px; color: #E0F2FE;
+        text-transform: uppercase;
+    }
+    .eagle-sub { font-size: 11px; color: #93C5FD; margin-top: 2px; }
+    .eagle-pill {
+        background: linear-gradient(135deg, rgba(14, 165, 233, 0.35), rgba(37, 99, 235, 0.45));
+        border: 1px solid rgba(125, 211, 252, 0.55);
+        color: #E0F2FE; padding: 4px 11px; border-radius: 999px;
+        font-weight: 700; font-size: 10px; letter-spacing: 0.7px;
+        box-shadow: 0 0 10px rgba(56, 189, 248, 0.25);
+    }
+    .eagle-mid-row { position: relative; z-index: 2; margin: 16px 0 14px 0; }
+    .eagle-bal-label {
+        font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
+        color: #BAE6FD; opacity: 0.92; margin-bottom: 4px;
+        display: flex; justify-content: space-between; align-items: center;
+    }
+    .eagle-bal-hint {
+        font-size: 10px; text-transform: none; letter-spacing: 0.2px;
+        color: #7DD3FC; font-weight: 600;
+    }
+    .eagle-bal-value {
+        font-size: 32px; font-weight: 800; letter-spacing: -0.5px;
+        background: linear-gradient(90deg, #FFFFFF 0%, #BAE6FD 55%, #38BDF8 100%);
+        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .eagle-bot-row {
+        display: flex; justify-content: space-between; align-items: center;
+        padding-top: 12px; border-top: 1px solid rgba(186, 230, 253, 0.2);
+        position: relative; z-index: 2; font-size: 11px; color: #DBEAFE;
+    }
+
     .st-key-wallet_click_overlay {
         position: absolute !important;
-        top: 70px !important;
+        top: 0 !important;
         left: 0 !important;
         right: 0 !important;
-        height: 166px !important;
-        z-index: 50 !important;
-    }
-    .st-key-wallet_click_overlay div[data-testid="stButton"],
-    .st-key-wallet_click_overlay div[data-testid="stButton"] button {
+        bottom: 0 !important;
         width: 100% !important;
-        height: 166px !important;
+        height: 100% !important;
+        z-index: 50 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+    .st-key-wallet_click_overlay * {
+        width: 100% !important;
+        height: 100% !important;
+        min-height: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+    .st-key-wallet_click_overlay button {
         opacity: 0 !important;
         background: transparent !important;
         border: none !important;
         box-shadow: none !important;
         cursor: pointer !important;
-        margin: 0 !important;
-        padding: 0 !important;
     }
 
     .st-key-wd_header_bar [data-testid="stHorizontalBlock"],
@@ -271,8 +370,6 @@ def get_cookie_manager():
     if not _HAS_COOKIES:
         return None
     return stx.CookieManager(key="elang_cookie_mgr")
-
-cookie_manager = get_cookie_manager()
 
 
 _SVG_PATHS = {
@@ -705,6 +802,20 @@ def save_key(key):
 def save_key_sync(key):
     worker.execute(worker.save_file, key, copy.deepcopy(worker.data[key.replace(".json", "")]))
 
+def set_akun_subpage(target_sub):
+    st.session_state["akun_subpage"] = target_sub
+    if target_sub != "add_payment_method":
+        st.session_state.pop("pending_payment_method", None)
+
+def open_payment_dialog(category, provider):
+    st.session_state["pending_payment_method"] = {
+        "category": category,
+        "provider": provider
+    }
+
+def toggle_hide_balance():
+    st.session_state["hide_balance"] = not st.session_state.get("hide_balance", False)
+
 def archive_db_items(emp_name, items):
     if not items:
         return
@@ -763,222 +874,46 @@ def revoke_employee_db(emp_name, item_ids=None, keep_stats=True, notify=True):
             save_users_sync()
     return len(revoked)
 
-def render_eagle_wallet_card(balance, role_label, owner_name):
-    bal_int = int(balance or 0)
+def render_eagle_wallet_card(balance, role_label, owner_name, is_hidden=False):
+    bal_text = "Rp ********" if is_hidden else fmt_rp(balance)
     safe_owner = html.escape(owner_name or "")
     safe_role = html.escape(role_label or "Karyawan")
     wib_now_txt = now_wib().strftime("%d %b %Y | %H:%M WIB")
-    card_html = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <style>
-        * {{ box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }}
-        body {{ background: transparent; overflow: hidden; padding: 2px; }}
-        .eagle-card {{
-            position: relative;
-            border-radius: 24px;
-            padding: 22px 22px 18px 22px;
-            color: #F0F9FF;
-            background: linear-gradient(135deg, #061333 0%, #0F2B6B 42%, #1D4ED8 78%, #0284C7 100%);
-            border: 1px solid rgba(56, 189, 248, 0.55);
-            box-shadow: 0 14px 34px rgba(14, 165, 233, 0.38), inset 0 1px 0 rgba(186, 230, 253, 0.25);
-            overflow: hidden;
-            min-height: 220px;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            cursor: pointer;
-        }}
-        .shimmer {{
-            position: absolute; top: -50%; left: -60%; width: 45%; height: 220%;
-            background: linear-gradient(115deg, transparent 20%, rgba(186, 230, 253, 0.2) 50%, transparent 80%);
-            transform: rotate(22deg);
-            animation: sweep 5.5s infinite ease-in-out;
-            pointer-events: none;
-        }}
-        @keyframes sweep {{
-            0% {{ left: -70%; }}
-            45% {{ left: 140%; }}
-            100% {{ left: 140%; }}
-        }}
-        .eagle-bg {{
-            position: absolute; right: -10px; bottom: -14px;
-            width: 178px; height: 178px; opacity: 0.18;
-            pointer-events: none;
-            animation: floatWing 4.5s ease-in-out infinite;
-        }}
-        @keyframes floatWing {{
-            0%, 100% {{ transform: translateY(0px) scale(1); }}
-            50% {{ transform: translateY(-5px) scale(1.03); }}
-        }}
-        .glow-orb {{
-            position: absolute; top: -45px; right: -30px;
-            width: 165px; height: 165px; border-radius: 50%;
-            background: radial-gradient(circle, rgba(56, 189, 248, 0.35) 0%, transparent 70%);
-            pointer-events: none;
-        }}
-        .top-row {{
-            display: flex; justify-content: space-between; align-items: center;
-            position: relative; z-index: 2;
-        }}
-        .brand {{
-            display: flex; align-items: center; gap: 10px;
-        }}
-        .crest {{
-            width: 42px; height: 42px; border-radius: 50%;
-            background: radial-gradient(circle at center, rgba(56,189,248,0.28), rgba(15,23,42,0.85));
-            border: 1.5px solid rgba(56, 189, 248, 0.65);
-            display: flex; align-items: center; justify-content: center;
-            box-shadow: 0 0 16px rgba(56, 189, 248, 0.35);
-        }}
-        .brand-text .title {{
-            font-size: 13px; font-weight: 800; letter-spacing: 0.8px; color: #E0F2FE;
-            text-transform: uppercase;
-        }}
-        .brand-text .sub {{
-            font-size: 11px; color: #93C5FD; margin-top: 2px;
-        }}
-        .eye-btn {{
-            background: rgba(15, 23, 42, 0.5);
-            border: 1px solid rgba(56, 189, 248, 0.4);
-            color: #E0F2FE; border-radius: 999px;
-            padding: 6px 12px; font-size: 11px; font-weight: 600;
-            cursor: pointer; display: flex; align-items: center; gap: 6px;
-            backdrop-filter: blur(6px); transition: all 0.2s ease;
-        }}
-        .eye-btn:hover {{ background: rgba(56, 189, 248, 0.25); border-color: #7DD3FC; }}
-        .mid-row {{
-            position: relative; z-index: 2; margin: 14px 0 12px 0;
-        }}
-        .bal-label {{
-            font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
-            color: #BAE6FD; opacity: 0.92; margin-bottom: 4px;
-            display: flex; justify-content: space-between; align-items: center;
-        }}
-        .bal-hint {{
-            font-size: 10px; text-transform: none; letter-spacing: 0.2px;
-            color: #7DD3FC; font-weight: 600;
-        }}
-        .bal-value {{
-            font-size: 32px; font-weight: 800; letter-spacing: -0.5px;
-            background: linear-gradient(90deg, #FFFFFF 0%, #BAE6FD 55%, #38BDF8 100%);
-            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-            text-shadow: 0 2px 12px rgba(0,0,0,0.2);
-        }}
-        .bot-row {{
-            display: flex; justify-content: space-between; align-items: center;
-            padding-top: 12px; border-top: 1px solid rgba(186, 230, 253, 0.2);
-            position: relative; z-index: 2; font-size: 11px; color: #DBEAFE;
-        }}
-        .pill {{
-            background: linear-gradient(135deg, rgba(14, 165, 233, 0.35), rgba(37, 99, 235, 0.45));
-            border: 1px solid rgba(125, 211, 252, 0.55);
-            color: #E0F2FE; padding: 4px 11px; border-radius: 999px;
-            font-weight: 700; font-size: 10px; letter-spacing: 0.7px;
-            box-shadow: 0 0 10px rgba(56, 189, 248, 0.25);
-        }}
-    </style>
-    </head>
-    <body>
-    <div class="eagle-card">
-        <div class="shimmer"></div>
-        <div class="glow-orb"></div>
-
-        <svg class="eagle-bg" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="100" cy="100" r="88" stroke="#7DD3FC" stroke-width="2" stroke-dasharray="6 4"/>
-            <path d="M100 32 C112 22, 130 24, 138 36 C126 36, 120 42, 118 50 C142 38, 174 34, 194 44 C174 58, 152 68, 132 72 C154 74, 174 82, 186 94 C162 98, 140 96, 120 90 C134 104, 142 122, 142 142 C126 130, 114 116, 106 100 L100 168 L94 100 C86 116, 74 130, 58 142 C58 122, 66 104, 80 90 C60 96, 38 98, 14 94 C26 82, 46 74, 68 72 C48 68, 26 58, 6 44 C26 34, 58 38, 82 50 C80 42, 74 36, 62 36 C70 24, 88 22, 100 32 Z" fill="url(#eagleBlueGrad)"/>
-            <defs>
-                <linearGradient id="eagleBlueGrad" x1="0" y1="0" x2="200" y2="200" gradientUnits="userSpaceOnUse">
-                    <stop offset="0%" stop-color="#BAE6FD"/>
-                    <stop offset="50%" stop-color="#38BDF8"/>
-                    <stop offset="100%" stop-color="#1D4ED8"/>
-                </linearGradient>
-            </defs>
-        </svg>
-
-        <div class="top-row">
-            <div class="brand">
-                <div class="crest">
-                    <svg width="28" height="28" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <circle cx="32" cy="32" r="27" stroke="#38BDF8" stroke-width="1.8" stroke-dasharray="3 2"/>
-                        <path d="M16 46 C16 28, 26 15, 43 13 C39 18, 38 22, 40 25 C47 24, 53 27, 56 32 C50 31, 45 33, 42 37 C45 40, 44 45, 39 49 C33 46, 25 46, 16 46 Z" fill="url(#headBlue)"/>
-                        <path d="M43 26 C48 26, 53 28, 56 32 C51 32, 46 34, 43 37 L38 32 Z" fill="#F59E0B"/>
-                        <circle cx="35" cy="23.5" r="2.2" fill="#0F172A"/>
-                        <circle cx="35.6" cy="23" r="0.8" fill="#BAE6FD"/>
-                        <defs>
-                            <linearGradient id="headBlue" x1="16" y1="13" x2="46" y2="49" gradientUnits="userSpaceOnUse">
-                                <stop offset="0%" stop-color="#7DD3FC"/>
-                                <stop offset="55%" stop-color="#3B82F6"/>
-                                <stop offset="100%" stop-color="#1E3A8A"/>
-                            </linearGradient>
-                        </defs>
-                    </svg>
-                </div>
-                <div class="brand-text">
-                    <div class="title">Elang Pintar</div>
-                    <div class="sub">{safe_owner} | {safe_role}</div>
-                </div>
-            </div>
-            <button class="eye-btn" id="toggleBtn" onclick="toggleBalance()">
-                <span id="eyeLabel">Sembunyikan</span>
-            </button>
-        </div>
-
-        <div class="mid-row">
-            <div class="bal-label">
-                <span>Saldo Gaji</span>
-                <span class="bal-hint">Ketuk untuk Penarikan &gt;</span>
-            </div>
-            <div class="bal-value" id="balText">Rp 0</div>
-        </div>
-
-        <div class="bot-row">
-            <span>{wib_now_txt}</span>
-            <span class="pill">ELANG PINTAR</span>
-        </div>
-    </div>
-
-    <script>
-        const target = {bal_int};
-        let hidden = false;
-        const balEl = document.getElementById("balText");
-        const eyeLabel = document.getElementById("eyeLabel");
-
-        function fmtRp(val) {{
-            return "Rp " + Number(val).toLocaleString("id-ID");
-        }}
-
-        function animateValue(start, end, duration) {{
-            const startTime = performance.now();
-            function frame(now) {{
-                const progress = Math.min((now - startTime) / duration, 1);
-                const eased = 1 - Math.pow(1 - progress, 3);
-                const current = Math.round(start + (end - start) * eased);
-                if (!hidden) balEl.textContent = fmtRp(current);
-                if (progress < 1) requestAnimationFrame(frame);
-            }}
-            requestAnimationFrame(frame);
-        }}
-
-        function toggleBalance() {{
-            hidden = !hidden;
-            if (hidden) {{
-                balEl.textContent = "Rp ********";
-                eyeLabel.textContent = "Tampilkan";
-            }} else {{
-                balEl.textContent = fmtRp(target);
-                eyeLabel.textContent = "Sembunyikan";
-            }}
-        }}
-
-        animateValue(0, target, 750);
-    </script>
-    </body>
-    </html>
-    """
-    components.html(card_html, height=240, scrolling=False)
+    card_html = (
+        f'<div class="eagle-card">'
+        f'<div class="eagle-shimmer"></div>'
+        f'<div class="eagle-glow-orb"></div>'
+        f'<svg class="eagle-bg-svg" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">'
+        f'<circle cx="100" cy="100" r="88" stroke="#7DD3FC" stroke-width="2" stroke-dasharray="6 4"/>'
+        f'<path d="M100 32 C112 22, 130 24, 138 36 C126 36, 120 42, 118 50 C142 38, 174 34, 194 44 C174 58, 152 68, 132 72 C154 74, 174 82, 186 94 C162 98, 140 96, 120 90 C134 104, 142 122, 142 142 C126 130, 114 116, 106 100 L100 168 L94 100 C86 116, 74 130, 58 142 C58 122, 66 104, 80 90 C60 96, 38 98, 14 94 C26 82, 46 74, 68 72 C48 68, 26 58, 6 44 C26 34, 58 38, 82 50 C80 42, 74 36, 62 36 C70 24, 88 22, 100 32 Z" fill="url(#eagleBlueGrad)"/>'
+        f'<defs><linearGradient id="eagleBlueGrad" x1="0" y1="0" x2="200" y2="200" gradientUnits="userSpaceOnUse">'
+        f'<stop offset="0%" stop-color="#BAE6FD"/><stop offset="50%" stop-color="#38BDF8"/><stop offset="100%" stop-color="#1D4ED8"/>'
+        f'</linearGradient></defs></svg>'
+        f'<div class="eagle-top-row">'
+        f'<div class="eagle-brand">'
+        f'<div class="eagle-crest">'
+        f'<svg width="28" height="28" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">'
+        f'<circle cx="32" cy="32" r="27" stroke="#38BDF8" stroke-width="1.8" stroke-dasharray="3 2"/>'
+        f'<path d="M16 46 C16 28, 26 15, 43 13 C39 18, 38 22, 40 25 C47 24, 53 27, 56 32 C50 31, 45 33, 42 37 C45 40, 44 45, 39 49 C33 46, 25 46, 16 46 Z" fill="url(#headBlue)"/>'
+        f'<path d="M43 26 C48 26, 53 28, 56 32 C51 32, 46 34, 43 37 L38 32 Z" fill="#F59E0B"/>'
+        f'<circle cx="35" cy="23.5" r="2.2" fill="#0F172A"/>'
+        f'<circle cx="35.6" cy="23" r="0.8" fill="#BAE6FD"/>'
+        f'<defs><linearGradient id="headBlue" x1="16" y1="13" x2="46" y2="49" gradientUnits="userSpaceOnUse">'
+        f'<stop offset="0%" stop-color="#7DD3FC"/><stop offset="55%" stop-color="#3B82F6"/><stop offset="100%" stop-color="#1E3A8A"/>'
+        f'</linearGradient></defs></svg>'
+        f'</div>'
+        f'<div><div class="eagle-title">Elang Pintar</div><div class="eagle-sub">{safe_owner} | {safe_role}</div></div>'
+        f'</div>'
+        f'<span class="eagle-pill">ELANG PINTAR</span>'
+        f'</div>'
+        f'<div class="eagle-mid-row">'
+        f'<div class="eagle-bal-label"><span>Saldo Gaji</span><span class="eagle-bal-hint">Ketuk untuk Penarikan &gt;</span></div>'
+        f'<div class="eagle-bal-value">{bal_text}</div>'
+        f'</div>'
+        f'<div class="eagle-bot-row"><span>{wib_now_txt}</span><span>Klik di mana saja pada kartu</span></div>'
+        f'</div>'
+    )
+    st.markdown(card_html, unsafe_allow_html=True)
 
 
 def read_session_cookie(cookie_tokens):
@@ -993,6 +928,12 @@ def read_session_cookie(cookie_tokens):
     return tok
 
 
+need_cookies = (
+    ("user" not in st.session_state)
+    or bool(st.session_state.get("_pending_cookie_set"))
+    or bool(st.session_state.get("_pending_cookie_delete"))
+)
+cookie_manager = get_cookie_manager() if need_cookies else None
 cookie_tokens = {}
 if cookie_manager is not None:
     try:
@@ -1246,15 +1187,25 @@ if page == "Akun":
         with st.container(key="wd_header_bar"):
             hc1, hc2, hc3 = st.columns([1.2, 1.3, 1.6])
             with hc1:
-                if st.button("Kembali", key="wd_back_main", icon=":material/arrow_back:", use_container_width=True):
-                    st.session_state["akun_subpage"] = "main"
-                    st.rerun()
+                st.button(
+                    "Kembali",
+                    key="wd_back_main",
+                    icon=":material/arrow_back:",
+                    use_container_width=True,
+                    on_click=set_akun_subpage,
+                    args=("main",)
+                )
             with hc2:
                 st.markdown("<h3 style='text-align:center;margin:0;'>Penarikan</h3>", unsafe_allow_html=True)
             with hc3:
-                if st.button("Riwayat Transaksi", key="wd_go_history", icon=":material/receipt_long:", use_container_width=True):
-                    st.session_state["akun_subpage"] = "tx_history"
-                    st.rerun()
+                st.button(
+                    "Riwayat Transaksi",
+                    key="wd_go_history",
+                    icon=":material/receipt_long:",
+                    use_container_width=True,
+                    on_click=set_akun_subpage,
+                    args=("tx_history",)
+                )
 
         if st.session_state.get("wd_success_msg"):
             st.success(st.session_state.pop("wd_success_msg"))
@@ -1277,9 +1228,15 @@ if page == "Akun":
         selected_acc = None
 
         if not accounts:
-            if st.button("Tambahkan Alamat", key="btn_add_addr_empty", type="primary", use_container_width=True, icon=":material/add_card:"):
-                st.session_state["akun_subpage"] = "add_payment_method"
-                st.rerun()
+            st.button(
+                "Tambahkan Alamat",
+                key="btn_add_addr_empty",
+                type="primary",
+                use_container_width=True,
+                icon=":material/add_card:",
+                on_click=set_akun_subpage,
+                args=("add_payment_method",)
+            )
         else:
             with st.container(key="addr_row_bar"):
                 ac1, ac2 = st.columns([2.3, 1.4])
@@ -1294,9 +1251,14 @@ if page == "Akun":
                     )
                     selected_acc = accounts[sel_idx]
                 with ac2:
-                    if st.button("Tambah Lain", key="btn_add_addr_other", use_container_width=True, icon=":material/add:"):
-                        st.session_state["akun_subpage"] = "add_payment_method"
-                        st.rerun()
+                    st.button(
+                        "Tambah Lain",
+                        key="btn_add_addr_other",
+                        use_container_width=True,
+                        icon=":material/add:",
+                        on_click=set_akun_subpage,
+                        args=("add_payment_method",)
+                    )
 
             st.markdown(f"""
             <div class="wd-owner-box">
@@ -1361,10 +1323,13 @@ if page == "Akun":
                 st.rerun()
 
     elif subpage == "add_payment_method":
-        if st.button("Kembali", key="add_pay_back", icon=":material/arrow_back:"):
-            st.session_state.pop("pending_payment_method", None)
-            st.session_state["akun_subpage"] = "withdraw"
-            st.rerun()
+        st.button(
+            "Kembali",
+            key="add_pay_back",
+            icon=":material/arrow_back:",
+            on_click=set_akun_subpage,
+            args=("withdraw",)
+        )
 
         st.subheader("Pilih Tujuan Pembayaran")
 
@@ -1372,31 +1337,39 @@ if page == "Akun":
         for row_start in range(0, len(BANK_LIST), 3):
             cols = st.columns(3)
             for col, bank_name in zip(cols, BANK_LIST[row_start:row_start + 3]):
-                if col.button(bank_name, key=f"pick_bank_{bank_name}", use_container_width=True):
-                    st.session_state["pending_payment_method"] = {
-                        "category": "Bank",
-                        "provider": bank_name
-                    }
+                col.button(
+                    bank_name,
+                    key=f"pick_bank_{bank_name}",
+                    use_container_width=True,
+                    on_click=open_payment_dialog,
+                    args=("Bank", bank_name)
+                )
 
         st.write("")
         st.markdown("<div class='wd-section-label'>E-wallet</div>", unsafe_allow_html=True)
         for row_start in range(0, len(EWALLET_LIST), 3):
             cols = st.columns(3)
             for col, ew_name in zip(cols, EWALLET_LIST[row_start:row_start + 3]):
-                if col.button(ew_name, key=f"pick_ew_{ew_name}", use_container_width=True):
-                    st.session_state["pending_payment_method"] = {
-                        "category": "E-wallet",
-                        "provider": ew_name
-                    }
+                col.button(
+                    ew_name,
+                    key=f"pick_ew_{ew_name}",
+                    use_container_width=True,
+                    on_click=open_payment_dialog,
+                    args=("E-wallet", ew_name)
+                )
 
         pending_pay = st.session_state.get("pending_payment_method")
         if pending_pay:
             show_add_payment_dialog(pending_pay, user)
 
     elif subpage == "tx_history":
-        if st.button("Kembali", key="tx_hist_back", icon=":material/arrow_back:"):
-            st.session_state["akun_subpage"] = "withdraw"
-            st.rerun()
+        st.button(
+            "Kembali",
+            key="tx_hist_back",
+            icon=":material/arrow_back:",
+            on_click=set_akun_subpage,
+            args=("withdraw",)
+        )
 
         st.subheader("Riwayat Transaksi")
         my_wds = [r for r in worker.data["reports"]["wd"] if r["user"] == user["name"]]
@@ -1433,12 +1406,25 @@ if page == "Akun":
         """, unsafe_allow_html=True)
 
         role_txt = "Administrator" if user["role"] == "admin" else "Karyawan Elang Pintar"
+        is_hidden = st.session_state.get("hide_balance", False)
+
         with st.container(key="eagle_wallet_box"):
-            render_eagle_wallet_card(available, role_txt, user["name"])
+            render_eagle_wallet_card(available, role_txt, user["name"], is_hidden=is_hidden)
             with st.container(key="wallet_click_overlay"):
-                if st.button("Buka Penarikan", key="btn_open_wd_from_card"):
-                    st.session_state["akun_subpage"] = "withdraw"
-                    st.rerun()
+                st.button(
+                    "Buka Penarikan",
+                    key="btn_open_wd_from_card",
+                    on_click=set_akun_subpage,
+                    args=("withdraw",)
+                )
+
+        st.button(
+            "Tampilkan Saldo" if is_hidden else "Sembunyikan Saldo",
+            key="btn_toggle_hide_bal",
+            use_container_width=True,
+            icon=":material/visibility:" if is_hidden else ":material/visibility_off:",
+            on_click=toggle_hide_balance
+        )
 
         tg_raw = user.get("telegram", "").strip().lstrip("@")
         tg_display = f"@{tg_raw}" if tg_raw else "Belum diatur"
