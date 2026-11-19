@@ -118,6 +118,43 @@ st.markdown("""
     }
     .st-key-nav_bottom div[data-testid="stRadio"] > label { display: none !important; }
 
+    .st-key-eagle_wallet_box {
+        position: relative !important;
+        margin-bottom: 10px !important;
+    }
+    .st-key-wallet_click_overlay {
+        position: absolute !important;
+        top: 70px !important;
+        left: 0 !important;
+        right: 0 !important;
+        height: 166px !important;
+        z-index: 50 !important;
+    }
+    .st-key-wallet_click_overlay div[data-testid="stButton"],
+    .st-key-wallet_click_overlay div[data-testid="stButton"] button {
+        width: 100% !important;
+        height: 166px !important;
+        opacity: 0 !important;
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        cursor: pointer !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    .st-key-wd_header_bar [data-testid="stHorizontalBlock"],
+    .st-key-addr_row_bar [data-testid="stHorizontalBlock"] {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        align-items: center !important;
+        gap: 8px !important;
+    }
+    .st-key-wd_header_bar [data-testid="stColumn"] {
+        min-width: 0 !important;
+    }
+
     .stButton > button {
         background: linear-gradient(135deg, #1E40AF 0%, #3B82F6 100%);
         border: 1px solid #2563EB; color: white !important;
@@ -133,11 +170,11 @@ st.markdown("""
         background: linear-gradient(135deg, #0EA5E9 0%, #38BDF8 100%);
         box-shadow: 0 4px 16px rgba(56, 189, 248, 0.45);
     }
-    .stTextInput input, .stTextArea textarea {
+    .stTextInput input, .stTextArea textarea, .stNumberInput input {
         background: #0F172A !important; border: 1px solid #1E3A8A !important;
         color: #E0F2FE !important; border-radius: 10px !important;
     }
-    .stTextInput input:focus, .stTextArea textarea:focus {
+    .stTextInput input:focus, .stTextArea textarea:focus, .stNumberInput input:focus {
         border-color: #3B82F6 !important;
         box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3) !important;
     }
@@ -183,6 +220,49 @@ st.markdown("""
         transform: translateY(-1px);
     }
     .list-item-left { display: flex; align-items: center; gap: 12px; }
+    .wd-balance-box {
+        background: linear-gradient(135deg, #0B1736 0%, #0F172A 100%);
+        border: 1px solid #1E3A8A;
+        border-radius: 16px;
+        padding: 14px 16px;
+        margin: 12px 0 16px 0;
+    }
+    .wd-balance-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 6px 0;
+        font-size: 14px;
+        color: #CBD5E1;
+    }
+    .wd-balance-row strong {
+        color: #E0F2FE;
+        font-size: 15px;
+    }
+    .wd-section-label {
+        font-size: 13px;
+        font-weight: 700;
+        color: #93C5FD;
+        margin: 10px 0 6px 0;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .wd-owner-box {
+        background: rgba(15, 23, 42, 0.85);
+        border: 1px solid #1E3A8A;
+        border-radius: 12px;
+        padding: 12px 14px;
+        margin-top: 6px;
+        margin-bottom: 14px;
+        color: #E0F2FE;
+    }
+    .wd-fee-box {
+        background: rgba(15, 23, 42, 0.7);
+        border: 1px solid #1E3A8A;
+        border-radius: 12px;
+        padding: 12px 14px;
+        margin: 8px 0 14px 0;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -212,6 +292,9 @@ _SVG_PATHS = {
     "send":       '<line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>',
     "alert":      '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
     "info":       '<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>',
+    "back":       '<polyline points="15 18 9 12 15 6"/>',
+    "history":    '<path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><polyline points="12 7 12 12 15 14"/>',
+    "wallet":     '<path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/>',
 }
 
 def svg(name, size=16, color="#38BDF8"):
@@ -561,6 +644,10 @@ worker.cleanup_expired_popups()
 
 
 DB_STATUSES = ["Belum Dicek", "Tidak Terdaftar", "Terdaftar", "Dibaca", "Dibalas"]
+WD_FEE = 3000.0
+WD_MIN = 20000.0
+BANK_LIST = ["BCA", "BRI", "BNI", "Mandiri", "BSI", "CIMB Niaga", "SeaBank", "Bank Jago", "Permata", "Danamon", "OCBC", "BTN"]
+EWALLET_LIST = ["DANA", "OVO", "GoPay", "ShopeePay", "LinkAja"]
 
 def gen_uid():
     existing = {u["uid"] for u in worker.data["users"]}
@@ -581,6 +668,12 @@ def fmt_rp(n):
         return f"Rp {int(n):,}".replace(",", ".")
     except Exception:
         return f"Rp {n}"
+
+def fmt_idr(n):
+    try:
+        return f"{float(n):,.2f}"
+    except Exception:
+        return "0.00"
 
 def fmt_remaining(expires_iso):
     try:
@@ -696,6 +789,7 @@ def render_eagle_wallet_card(balance, role_label, owner_name):
             display: flex;
             flex-direction: column;
             justify-content: space-between;
+            cursor: pointer;
         }}
         .shimmer {{
             position: absolute; top: -50%; left: -60%; width: 45%; height: 220%;
@@ -756,11 +850,16 @@ def render_eagle_wallet_card(balance, role_label, owner_name):
         }}
         .eye-btn:hover {{ background: rgba(56, 189, 248, 0.25); border-color: #7DD3FC; }}
         .mid-row {{
-            position: relative; z-index: 2; margin: 16px 0 14px 0;
+            position: relative; z-index: 2; margin: 14px 0 12px 0;
         }}
         .bal-label {{
             font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
             color: #BAE6FD; opacity: 0.92; margin-bottom: 4px;
+            display: flex; justify-content: space-between; align-items: center;
+        }}
+        .bal-hint {{
+            font-size: 10px; text-transform: none; letter-spacing: 0.2px;
+            color: #7DD3FC; font-weight: 600;
         }}
         .bal-value {{
             font-size: 32px; font-weight: 800; letter-spacing: -0.5px;
@@ -828,7 +927,10 @@ def render_eagle_wallet_card(balance, role_label, owner_name):
         </div>
 
         <div class="mid-row">
-            <div class="bal-label">Saldo Gaji</div>
+            <div class="bal-label">
+                <span>Saldo Gaji</span>
+                <span class="bal-hint">Ketuk untuk Penarikan &gt;</span>
+            </div>
             <div class="bal-value" id="balText">Rp 0</div>
         </div>
 
@@ -1033,18 +1135,42 @@ def show_employee_popups(active_popups, current_user):
             save_key_sync("popups.json")
         st.rerun()
 
-if user["role"] == "karyawan":
-    now_iso = now_wib().isoformat()
-    closed_sess = st.session_state.get("closed_popups_session", set())
-    visible_popups = [
-        p for p in worker.data.get("popups", [])
-        if (not p.get("expires_at") or now_iso <= p["expires_at"])
-        and p.get("target") in ("all", user["name"])
-        and p["id"] not in closed_sess
-        and (not p.get("allow_dismiss", True) or user["uid"] not in p.get("dismissed_by", []))
-    ]
-    if visible_popups:
-        show_employee_popups(visible_popups, user)
+
+@st.dialog("Input Detail Tujuan Pembayaran")
+def show_add_payment_dialog(pending_pay, current_user):
+    cat = pending_pay["category"]
+    prov = pending_pay["provider"]
+    st.markdown(f"**{cat} Terpilih:** {prov}")
+    lbl_num = "Nomor Rekening" if cat == "Bank" else "Nomor E-wallet / HP"
+    acc_num = st.text_input(lbl_num, placeholder="Contoh: 081234567890", key="dlg_pay_num")
+    acc_holder = st.text_input("Nama Pemilik Rekening / Akun", placeholder="Sesuai nama di rekening/e-wallet", key="dlg_pay_holder")
+    st.warning("Pastikan Nomor Rekening / E-wallet dan Nama Pemilik sudah benar. Kesalahan data dapat menyebabkan penarikan gagal atau salah transfer.")
+
+    c1, c2 = st.columns(2)
+    if c1.button("Simpan", type="primary", use_container_width=True, icon=":material/save:", key="dlg_pay_save"):
+        num_clean = re.sub(r"\s+", "", acc_num or "")
+        holder_clean = (acc_holder or "").strip()
+        if not num_clean or not num_clean.isdigit():
+            st.error("Nomor rekening / e-wallet wajib berupa angka.")
+        elif len(num_clean) < 5:
+            st.error("Nomor terlalu pendek.")
+        elif not holder_clean:
+            st.error("Nama pemilik wajib diisi.")
+        else:
+            current_user.setdefault("accounts", []).append({
+                "id": uuid.uuid4().hex,
+                "category": cat,
+                "bank": prov,
+                "number": num_clean,
+                "name": holder_clean
+            })
+            save_users_sync()
+            st.session_state.pop("pending_payment_method", None)
+            st.session_state["akun_subpage"] = "withdraw"
+            st.rerun()
+    if c2.button("Batal", use_container_width=True, key="dlg_pay_cancel"):
+        st.session_state.pop("pending_payment_method", None)
+        st.rerun()
 
 
 st.markdown(
@@ -1089,97 +1215,308 @@ with st.container(key="nav_bottom"):
             key="nav_radio_karyawan"
         )
 
+if page != "Akun":
+    st.session_state["akun_subpage"] = "main"
+    st.session_state.pop("pending_payment_method", None)
+
+if user["role"] == "karyawan" and not st.session_state.get("pending_payment_method"):
+    now_iso = now_wib().isoformat()
+    closed_sess = st.session_state.get("closed_popups_session", set())
+    visible_popups = [
+        p for p in worker.data.get("popups", [])
+        if (not p.get("expires_at") or now_iso <= p["expires_at"])
+        and p.get("target") in ("all", user["name"])
+        and p["id"] not in closed_sess
+        and (not p.get("allow_dismiss", True) or user["uid"] not in p.get("dismissed_by", []))
+    ]
+    if visible_popups:
+        show_employee_popups(visible_popups, user)
+
 
 if page == "Akun":
-    st.markdown(f"""
-    <div class="profile-card">
-        <div class="profile-avatar">{svg('user', 36, 'white')}</div>
-        <div class="profile-info">
-            <h3>{html.escape(user['name'])}</h3>
-            <p>UID: {user['uid']}</p>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
+    subpage = st.session_state.get("akun_subpage", "main")
     my_payroll = worker.data["payroll"].get(user["name"], 0)
-    role_txt = "Administrator" if user["role"] == "admin" else "Karyawan Elang Pintar"
-    render_eagle_wallet_card(my_payroll, role_txt, user["name"])
+    pending_wd = sum(
+        r["amount"] for r in worker.data["reports"]["wd"]
+        if r["user"] == user["name"] and r.get("status", "pending") == "pending"
+    )
+    available = max(my_payroll - pending_wd, 0)
 
-    tg_raw = user.get("telegram", "").strip().lstrip("@")
-    tg_display = f"@{tg_raw}" if tg_raw else "Belum diatur"
-    tg_color = "#22C55E" if tg_raw else "#F59E0B"
-    notif_count = len(user.get("notifications", []))
-
-    st.markdown(f"""
-    <div class="list-item">
-        <div class="list-item-left">{svg('bell', 20)}<span>Notifikasi</span></div>
-        <span style="color: #94A3B8;">{notif_count} pesan &gt;</span>
-    </div>
-    <div class="list-item">
-        <div class="list-item-left">{svg('link', 20, '#3B82F6')}<span>Telegram</span></div>
-        <span style="color: {tg_color};">{tg_display} &gt;</span>
-    </div>
-    """, unsafe_allow_html=True)
-
-    st.write("")
-
-    with st.expander("Pengaturan Akun", expanded=False):
-        with st.form("settings_form"):
-            st.write("**Ubah Username & Telegram**")
-            new_name = st.text_input("Username Akun", value=user.get("name", ""), max_chars=50)
-            new_telegram = st.text_input(
-                "Username Telegram",
-                value=user.get("telegram", "").lstrip("@"),
-                placeholder="username_tanpa_@"
-            )
-            if st.form_submit_button("Simpan Perubahan", use_container_width=True, icon=":material/save:"):
-                new_name_clean = new_name.strip()
-                new_tg_clean = new_telegram.strip().lstrip("@")
-
-                if not new_name_clean:
-                    st.error("Username tidak boleh kosong.")
-                elif any(u["name"] == new_name_clean and u["uid"] != user["uid"] for u in worker.data["users"]):
-                    st.error("Username sudah dipakai user lain.")
-                else:
-                    old_name = user["name"]
-                    user["name"] = new_name_clean
-                    user["telegram"] = new_tg_clean
-
-                    if old_name != new_name_clean:
-                        for d in worker.data["databases"]:
-                            if d["name"] == old_name: d["name"] = new_name_clean
-                        if old_name in worker.data["payroll"]:
-                            worker.data["payroll"][new_name_clean] = worker.data["payroll"].pop(old_name)
-                        if old_name in worker.data["db_stats"]:
-                            worker.data["db_stats"][new_name_clean] = worker.data["db_stats"].pop(old_name)
-                            save_key_sync("db_stats.json")
-                        for p in worker.data.get("popups", []):
-                            if p.get("target") == old_name:
-                                p["target"] = new_name_clean
-                        save_key_sync("popups.json")
-                        for k in ["ndp", "wd", "video"]:
-                            for r in worker.data["reports"][k]:
-                                if r["user"] == old_name: r["user"] = new_name_clean
-                        save_key_sync("databases.json")
-                        save_key_sync("payroll.json")
-                        save_key_sync("reports.json")
-
-                    save_users_sync()
-                    st.toast("Profil berhasil diperbarui!")
+    if subpage == "withdraw":
+        with st.container(key="wd_header_bar"):
+            hc1, hc2, hc3 = st.columns([1.2, 1.3, 1.6])
+            with hc1:
+                if st.button("Kembali", key="wd_back_main", icon=":material/arrow_back:", use_container_width=True):
+                    st.session_state["akun_subpage"] = "main"
+                    st.rerun()
+            with hc2:
+                st.markdown("<h3 style='text-align:center;margin:0;'>Penarikan</h3>", unsafe_allow_html=True)
+            with hc3:
+                if st.button("Riwayat Transaksi", key="wd_go_history", icon=":material/receipt_long:", use_container_width=True):
+                    st.session_state["akun_subpage"] = "tx_history"
                     st.rerun()
 
-    if st.button("Keluar / Logout", use_container_width=True, icon=":material/logout:"):
-        token = st.session_state.get("session_token")
-        worker.delete_session(token)
+        if st.session_state.get("wd_success_msg"):
+            st.success(st.session_state.pop("wd_success_msg"))
 
-        st.session_state.pop("user", None)
-        st.session_state.pop("session_token", None)
-        st.session_state.pop("closed_popups_session", None)
-        st.session_state.pop("_pending_cookie_set", None)
-        st.session_state.pop("_cookie_set_tries", None)
-        st.session_state["_pending_cookie_delete"] = True
-        st.session_state["_cookie_del_tries"] = 0
-        st.rerun()
+        st.markdown(f"""
+        <div class="wd-balance-box">
+            <div class="wd-balance-row">
+                <span>Tersedia:</span>
+                <strong>IDR {fmt_idr(available)}</strong>
+            </div>
+            <div class="wd-balance-row">
+                <span>Dibekukan:</span>
+                <strong>IDR {fmt_idr(pending_wd)}</strong>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown("<div class='wd-section-label'>Alamat Penarikan</div>", unsafe_allow_html=True)
+        accounts = user.get("accounts", [])
+        selected_acc = None
+
+        if not accounts:
+            if st.button("Tambahkan Alamat", key="btn_add_addr_empty", type="primary", use_container_width=True, icon=":material/add_card:"):
+                st.session_state["akun_subpage"] = "add_payment_method"
+                st.rerun()
+        else:
+            with st.container(key="addr_row_bar"):
+                ac1, ac2 = st.columns([2.3, 1.4])
+                with ac1:
+                    acc_labels = [f"{a['bank']} - {a['number']}" for a in accounts]
+                    sel_idx = st.selectbox(
+                        "Jenis E-wallet/Bank",
+                        range(len(accounts)),
+                        format_func=lambda i: acc_labels[i],
+                        label_visibility="collapsed",
+                        key="wd_sel_account"
+                    )
+                    selected_acc = accounts[sel_idx]
+                with ac2:
+                    if st.button("Tambah Lain", key="btn_add_addr_other", use_container_width=True, icon=":material/add:"):
+                        st.session_state["akun_subpage"] = "add_payment_method"
+                        st.rerun()
+
+            st.markdown(f"""
+            <div class="wd-owner-box">
+                <div style="font-size:11px;color:#93C5FD;">Nama Pemilik {html.escape(selected_acc.get('category', 'Rekening'))} ({html.escape(selected_acc['bank'])})</div>
+                <div style="font-size:16px;font-weight:700;margin-top:2px;">{html.escape(selected_acc['name'])}</div>
+                <div style="font-size:12px;color:#94A3B8;margin-top:2px;">No: {html.escape(selected_acc['number'])}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown("<div class='wd-section-label'>Jumlah Penarikan (IDR)</div>", unsafe_allow_html=True)
+        wd_amount = st.number_input(
+            "Jumlah Penarikan",
+            min_value=0.0,
+            value=None,
+            step=5000.0,
+            format="%.2f",
+            placeholder="Minimal 20,000.00",
+            label_visibility="collapsed",
+            key="wd_amount_in"
+        )
+
+        wd_val = float(wd_amount) if wd_amount is not None else 0.0
+        net_val = max(wd_val - WD_FEE, 0.0) if wd_val > 0 else 0.0
+
+        st.markdown(f"""
+        <div class="wd-fee-box">
+            <div class="wd-balance-row">
+                <span>Biaya</span>
+                <strong>{fmt_idr(WD_FEE)} IDR</strong>
+            </div>
+            <div class="wd-balance-row">
+                <span>Estimasi Diterima</span>
+                <strong style="color:#38BDF8;">{fmt_idr(net_val)} IDR</strong>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        if st.button("Lanjutkan", type="primary", use_container_width=True, key="btn_submit_wd"):
+            if not accounts or selected_acc is None:
+                st.error("Tambahkan alamat penarikan terlebih dahulu.")
+            elif wd_val < WD_MIN:
+                st.error(f"Minimal penarikan adalah {fmt_idr(WD_MIN)} IDR.")
+            elif wd_val > available:
+                st.error("Saldo tersedia tidak mencukupi.")
+            else:
+                worker.data["reports"]["wd"].append({
+                    "id": uuid.uuid4().hex,
+                    "user": user["name"],
+                    "uid": user["uid"],
+                    "amount": wd_val,
+                    "fee": WD_FEE,
+                    "net_amount": wd_val - WD_FEE,
+                    "account": copy.deepcopy(selected_acc),
+                    "status": "pending",
+                    "time": str(now_wib())
+                })
+                save_key_sync("reports.json")
+                st.session_state["wd_success_msg"] = (
+                    f"Permintaan penarikan sebesar IDR {fmt_idr(wd_val)} telah dikirim ke Admin. "
+                    f"Dana sebesar IDR {fmt_idr(wd_val - WD_FEE)} akan tiba dalam 5 menit."
+                )
+                st.rerun()
+
+    elif subpage == "add_payment_method":
+        if st.button("Kembali", key="add_pay_back", icon=":material/arrow_back:"):
+            st.session_state.pop("pending_payment_method", None)
+            st.session_state["akun_subpage"] = "withdraw"
+            st.rerun()
+
+        st.subheader("Pilih Tujuan Pembayaran")
+
+        st.markdown("<div class='wd-section-label'>Bank</div>", unsafe_allow_html=True)
+        for row_start in range(0, len(BANK_LIST), 3):
+            cols = st.columns(3)
+            for col, bank_name in zip(cols, BANK_LIST[row_start:row_start + 3]):
+                if col.button(bank_name, key=f"pick_bank_{bank_name}", use_container_width=True):
+                    st.session_state["pending_payment_method"] = {
+                        "category": "Bank",
+                        "provider": bank_name
+                    }
+
+        st.write("")
+        st.markdown("<div class='wd-section-label'>E-wallet</div>", unsafe_allow_html=True)
+        for row_start in range(0, len(EWALLET_LIST), 3):
+            cols = st.columns(3)
+            for col, ew_name in zip(cols, EWALLET_LIST[row_start:row_start + 3]):
+                if col.button(ew_name, key=f"pick_ew_{ew_name}", use_container_width=True):
+                    st.session_state["pending_payment_method"] = {
+                        "category": "E-wallet",
+                        "provider": ew_name
+                    }
+
+        pending_pay = st.session_state.get("pending_payment_method")
+        if pending_pay:
+            show_add_payment_dialog(pending_pay, user)
+
+    elif subpage == "tx_history":
+        if st.button("Kembali", key="tx_hist_back", icon=":material/arrow_back:"):
+            st.session_state["akun_subpage"] = "withdraw"
+            st.rerun()
+
+        st.subheader("Riwayat Transaksi")
+        my_wds = [r for r in worker.data["reports"]["wd"] if r["user"] == user["name"]]
+        if not my_wds:
+            st.info("Belum ada riwayat penarikan.")
+        else:
+            for r in reversed(my_wds):
+                stt = r.get("status", "pending").upper()
+                amt = r.get("amount", 0)
+                fee = r.get("fee", 0)
+                net = r.get("net_amount", max(amt - fee, 0))
+                acc = r.get("account", {})
+                with st.container(border=True):
+                    st.markdown(f"**[{stt}] IDR {fmt_idr(amt)}**")
+                    st.caption(
+                        f"Tujuan: {acc.get('bank', '-')} - {acc.get('number', '-')} a.n. {acc.get('name', '-')}"
+                    )
+                    st.caption(
+                        f"Biaya: IDR {fmt_idr(fee)} | Diterima: IDR {fmt_idr(net)}"
+                    )
+                    if stt == "PENDING":
+                        st.caption("Status: Diproses Admin (estimasi tiba dalam 5 menit)")
+                    st.caption(f"Waktu: {r.get('time', '-')}")
+
+    else:
+        st.markdown(f"""
+        <div class="profile-card">
+            <div class="profile-avatar">{svg('user', 36, 'white')}</div>
+            <div class="profile-info">
+                <h3>{html.escape(user['name'])}</h3>
+                <p>UID: {user['uid']}</p>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        role_txt = "Administrator" if user["role"] == "admin" else "Karyawan Elang Pintar"
+        with st.container(key="eagle_wallet_box"):
+            render_eagle_wallet_card(available, role_txt, user["name"])
+            with st.container(key="wallet_click_overlay"):
+                if st.button("Buka Penarikan", key="btn_open_wd_from_card"):
+                    st.session_state["akun_subpage"] = "withdraw"
+                    st.rerun()
+
+        tg_raw = user.get("telegram", "").strip().lstrip("@")
+        tg_display = f"@{tg_raw}" if tg_raw else "Belum diatur"
+        tg_color = "#22C55E" if tg_raw else "#F59E0B"
+        notif_count = len(user.get("notifications", []))
+
+        st.markdown(f"""
+        <div class="list-item">
+            <div class="list-item-left">{svg('bell', 20)}<span>Notifikasi</span></div>
+            <span style="color: #94A3B8;">{notif_count} pesan &gt;</span>
+        </div>
+        <div class="list-item">
+            <div class="list-item-left">{svg('link', 20, '#3B82F6')}<span>Telegram</span></div>
+            <span style="color: {tg_color};">{tg_display} &gt;</span>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.write("")
+
+        with st.expander("Pengaturan Akun", expanded=False):
+            with st.form("settings_form"):
+                st.write("**Ubah Username & Telegram**")
+                new_name = st.text_input("Username Akun", value=user.get("name", ""), max_chars=50)
+                new_telegram = st.text_input(
+                    "Username Telegram",
+                    value=user.get("telegram", "").lstrip("@"),
+                    placeholder="username_tanpa_@"
+                )
+                if st.form_submit_button("Simpan Perubahan", use_container_width=True, icon=":material/save:"):
+                    new_name_clean = new_name.strip()
+                    new_tg_clean = new_telegram.strip().lstrip("@")
+
+                    if not new_name_clean:
+                        st.error("Username tidak boleh kosong.")
+                    elif any(u["name"] == new_name_clean and u["uid"] != user["uid"] for u in worker.data["users"]):
+                        st.error("Username sudah dipakai user lain.")
+                    else:
+                        old_name = user["name"]
+                        user["name"] = new_name_clean
+                        user["telegram"] = new_tg_clean
+
+                        if old_name != new_name_clean:
+                            for d in worker.data["databases"]:
+                                if d["name"] == old_name: d["name"] = new_name_clean
+                            if old_name in worker.data["payroll"]:
+                                worker.data["payroll"][new_name_clean] = worker.data["payroll"].pop(old_name)
+                            if old_name in worker.data["db_stats"]:
+                                worker.data["db_stats"][new_name_clean] = worker.data["db_stats"].pop(old_name)
+                                save_key_sync("db_stats.json")
+                            for p in worker.data.get("popups", []):
+                                if p.get("target") == old_name:
+                                    p["target"] = new_name_clean
+                            save_key_sync("popups.json")
+                            for k in ["ndp", "wd", "video"]:
+                                for r in worker.data["reports"][k]:
+                                    if r["user"] == old_name: r["user"] = new_name_clean
+                            save_key_sync("databases.json")
+                            save_key_sync("payroll.json")
+                            save_key_sync("reports.json")
+
+                        save_users_sync()
+                        st.toast("Profil berhasil diperbarui!")
+                        st.rerun()
+
+        if st.button("Keluar / Logout", use_container_width=True, icon=":material/logout:"):
+            token = st.session_state.get("session_token")
+            worker.delete_session(token)
+
+            st.session_state.pop("user", None)
+            st.session_state.pop("session_token", None)
+            st.session_state.pop("closed_popups_session", None)
+            st.session_state.pop("akun_subpage", None)
+            st.session_state.pop("pending_payment_method", None)
+            st.session_state.pop("_pending_cookie_set", None)
+            st.session_state.pop("_cookie_set_tries", None)
+            st.session_state["_pending_cookie_delete"] = True
+            st.session_state["_cookie_del_tries"] = 0
+            st.rerun()
 
 
 elif user["role"] == "admin":
@@ -1560,8 +1897,8 @@ elif user["role"] == "admin":
                         if p.get("message"):
                             st.write(p["message"])
                         st.caption(
-                            f"Dibuat: {p.get('created_at','-')[:16].replace('T',' ')} WIB · "
-                            f"Berakhir: {p.get('expires_at','-')[:16].replace('T',' ')} WIB · "
+                            f"Dibuat: {p.get('created_at','-')[:16].replace('T',' ')} WIB | "
+                            f"Berakhir: {p.get('expires_at','-')[:16].replace('T',' ')} WIB | "
                             f"Sudah ditutup permanen oleh: {len(p.get('dismissed_by', []))} user"
                         )
                         if st.button("Hentikan & Hapus PopUp", key=f"del_pop_{p['id']}", type="primary", icon=":material/delete:"):
@@ -1669,8 +2006,8 @@ elif user["role"] == "admin":
 
             st.progress(min(kinerja / 100, 1.0))
             st.caption(
-                f"Progres Cek DB: **{checked_pct:.1f}%** · "
-                f"Rasio Dibalas (dari DB valid/belum dicek): **{reply_pct:.1f}%** · "
+                f"Progres Cek DB: **{checked_pct:.1f}%** | "
+                f"Rasio Dibalas (dari DB valid/belum dicek): **{reply_pct:.1f}%** | "
                 f"Video Approved: **{video_pct:.1f}%**"
             )
 
@@ -1792,7 +2129,7 @@ elif user["role"] == "admin":
                 vkey = n.get("video_key")
                 v_cap = n.get("video_caption", "-")
                 v_size = n.get("video_size_mb", "-")
-                has_vid = f" · Video: {v_cap}" if vkey else " · TANPA VIDEO"
+                has_vid = f" | Video: {v_cap}" if vkey else " | TANPA VIDEO"
 
                 with st.expander(f"{n['user']} — {n.get('count', 0)} item{has_vid}"):
                     st.write("**Data NDP:**")
@@ -1817,9 +2154,9 @@ elif user["role"] == "admin":
                             )
                         else:
                             st.warning("URL video tidak tersedia.")
-                        st.caption(f"Caption: **{v_cap}** · {v_size} MB · Key: `{vkey}`")
+                        st.caption(f"Caption: **{v_cap}** | {v_size} MB | Key: `{vkey}`")
                     else:
-                        st.warning("Pengajuan ini TIDAK ada video (data lama / bug).")
+                        st.warning("Pengajuan ini TIDAK ada video.")
 
                     st.caption(f"Waktu: {n.get('time', '-')}")
 
@@ -1861,7 +2198,7 @@ elif user["role"] == "admin":
                 st.info("Belum ada riwayat.")
             for i, n in history:
                 badge = "APPROVED" if n["status"] == "approved" else "REJECTED"
-                vmark = " · [VIDEO]" if n.get("video_key") else " · [NO-VIDEO]"
+                vmark = " | [VIDEO]" if n.get("video_key") else " | [NO-VIDEO]"
                 with st.expander(f"[{badge}] {n['user']} — {n.get('count', 0)} item{vmark}"):
                     st.write("**Data NDP:**")
                     st.code(n["data"] or "(kosong)", language="text")
@@ -1886,24 +2223,69 @@ elif user["role"] == "admin":
         with tab_wd:
             wds = worker.data["reports"]["wd"]
             pending_wd = [(i, n) for i, n in enumerate(wds) if n.get("status", "pending") == "pending"]
+            history_wd = [(i, n) for i, n in enumerate(wds) if n.get("status", "pending") != "pending"]
+
             st.subheader(f"Pending ({len(pending_wd)})")
+            if not pending_wd:
+                st.info("Tidak ada permintaan penarikan pending.")
             for i, n in pending_wd:
                 acc = n.get("account", {})
-                with st.expander(f"{n['user']} — {fmt_rp(n['amount'])}"):
-                    st.write(f"{acc.get('bank','-')} — {acc.get('number','-')} a.n. {acc.get('name','-')}")
+                amt = n.get("amount", 0)
+                fee = n.get("fee", 0)
+                net = n.get("net_amount", max(amt - fee, 0))
+                with st.expander(f"{n['user']} — IDR {fmt_idr(amt)} ({acc.get('bank', '-')})"):
+                    st.write(f"**Tujuan:** {acc.get('category', 'Rekening')} {acc.get('bank', '-')} — `{acc.get('number', '-')}`")
+                    st.write(f"**Nama Pemilik:** {acc.get('name', '-')}")
+                    st.write(f"**Jumlah Penarikan:** IDR {fmt_idr(amt)}")
+                    st.write(f"**Biaya Admin:** IDR {fmt_idr(fee)}")
+                    st.write(f"**Total Transfer ke Karyawan:** IDR {fmt_idr(net)}")
+                    st.caption(f"Waktu: {n.get('time', '-')}")
                     c1, c2 = st.columns(2)
-                    if c1.button("Approve", key=f"a_w_{i}", icon=":material/check_circle:"):
+                    if c1.button("Approve", key=f"a_w_{i}", use_container_width=True, icon=":material/check_circle:"):
                         wds[i]["status"] = "approved"
                         worker.data["payroll"][n["user"]] = max(
-                            worker.data["payroll"].get(n["user"], 0) - n["amount"], 0
+                            worker.data["payroll"].get(n["user"], 0) - amt, 0
                         )
-                        save_key("payroll.json")
-                        save_key("reports.json")
+                        target_u = next((u for u in worker.data["users"] if u["name"] == n["user"]), None)
+                        if target_u:
+                            target_u.setdefault("notifications", []).append({
+                                "type": "wd",
+                                "message": f"Penarikan IDR {fmt_idr(amt)} (diterima IDR {fmt_idr(net)}) telah disetujui.",
+                                "read": False,
+                                "time": str(now_wib())
+                            })
+                            save_users_sync()
+                        save_key_sync("payroll.json")
+                        save_key_sync("reports.json")
                         st.rerun()
-                    if c2.button("Reject", key=f"r_w_{i}", icon=":material/cancel:"):
+                    if c2.button("Reject", key=f"r_w_{i}", use_container_width=True, icon=":material/cancel:"):
                         wds[i]["status"] = "rejected"
-                        save_key("reports.json")
+                        target_u = next((u for u in worker.data["users"] if u["name"] == n["user"]), None)
+                        if target_u:
+                            target_u.setdefault("notifications", []).append({
+                                "type": "wd",
+                                "message": f"Penarikan IDR {fmt_idr(amt)} ditolak oleh admin.",
+                                "read": False,
+                                "time": str(now_wib())
+                            })
+                            save_users_sync()
+                        save_key_sync("reports.json")
                         st.rerun()
+
+            st.divider()
+            st.subheader(f"Riwayat Penarikan ({len(history_wd)})")
+            if not history_wd:
+                st.info("Belum ada riwayat penarikan.")
+            for i, n in reversed(history_wd):
+                acc = n.get("account", {})
+                amt = n.get("amount", 0)
+                fee = n.get("fee", 0)
+                net = n.get("net_amount", max(amt - fee, 0))
+                stt = n.get("status", "-").upper()
+                with st.expander(f"[{stt}] {n['user']} — IDR {fmt_idr(amt)}"):
+                    st.write(f"Tujuan: {acc.get('bank', '-')} — `{acc.get('number', '-')}` a.n. {acc.get('name', '-')}")
+                    st.write(f"Biaya: IDR {fmt_idr(fee)} | Diterima: IDR {fmt_idr(net)}")
+                    st.caption(f"Waktu: {n.get('time', '-')}")
 
         with tab_video:
             vids = worker.data["reports"]["video"]
@@ -1940,7 +2322,7 @@ elif user["role"] == "admin":
                     status = v.get("status", "pending")
                     badge_map = {"pending": "[PENDING]", "approved": "[APPROVED]", "rejected": "[REJECTED]"}
                     badge = badge_map.get(status, "[?]")
-                    label = f"{badge} {v['user']} · {v.get('caption','-')}"
+                    label = f"{badge} {v['user']} | {v.get('caption','-')}"
                     cd_key = f"cd_{tab_tag}_{idx}"
 
                     with st.expander(label):
@@ -2156,7 +2538,7 @@ else:
                 stt = n.get("status", "pending")
                 icon_map = {"pending": "PENDING", "approved": "APPROVED", "rejected": "REJECTED"}
                 mark = "VIDEO" if n.get("video_key") else "NO-VIDEO"
-                with st.expander(f"[{icon_map.get(stt, stt.upper())}] {n.get('count', 0)} item · {mark}"):
+                with st.expander(f"[{icon_map.get(stt, stt.upper())}] {n.get('count', 0)} item | {mark}"):
                     st.code(n["data"] or "(kosong)", language="text")
                     if n.get("video_key"):
                         url = worker.video_link(n["video_key"])
@@ -2165,7 +2547,7 @@ else:
                                 st.video(url)
                             except Exception:
                                 st.warning("Video tidak bisa diputar.")
-                        st.caption(f"Caption: **{n.get('video_caption','-')}** · {n.get('video_size_mb','-')} MB")
+                        st.caption(f"Caption: **{n.get('video_caption','-')}** | {n.get('video_size_mb','-')} MB")
                     st.caption(f"Waktu: {n.get('time', '-')}")
 
     elif page == "Upload":
