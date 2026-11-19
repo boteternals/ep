@@ -30,7 +30,6 @@ def today_wib_str():
 from botocore.exceptions import ClientError
 from botocore.client import Config
 
-# === COOKIE LIB (fallback aman kalau belum install) ===
 try:
     import extra_streamlit_components as stx
     _HAS_COOKIES = True
@@ -38,9 +37,6 @@ except ImportError:
     _HAS_COOKIES = False
 
 
-# ==========================================
-# 0. PAGE CONFIG & CSS (TEMA BIRU ELANG)
-# ==========================================
 st.set_page_config(
     page_title="ElangPintar",
     page_icon="https://cdn.aceimg.com/mD4NlOxLG.png",
@@ -62,9 +58,6 @@ st.markdown("""
     h1, h2, h3, h4, h5, h6 { color: #E0F2FE !important; }
     .stMarkdown p, label { color: #CBD5E1; }
 
-    /* =====================================================
-       NAV BAWAH — hanya berlaku untuk st.container(key="nav_bottom")
-       ===================================================== */
     .st-key-nav_bottom div[data-testid="stRadio"] {
         position: fixed; bottom: 0; left: 0; right: 0;
         background: linear-gradient(180deg, #0B132B 0%, #020617 100%);
@@ -96,7 +89,6 @@ st.markdown("""
     }
     .st-key-nav_bottom div[data-testid="stRadio"] label:has(input:checked)::before { width: 45%; }
 
-    /* Sembunyikan lingkaran radio bawaan Streamlit (versi lama & terbaru) */
     .st-key-nav_bottom div[data-testid="stRadio"] label > div:first-child,
     .st-key-nav_bottom div[data-testid="stRadio"] [data-baseweb="radio"] > div:first-child,
     .st-key-nav_bottom div[data-testid="stRadio"] input[type="radio"] {
@@ -126,9 +118,6 @@ st.markdown("""
     }
     .st-key-nav_bottom div[data-testid="stRadio"] > label { display: none !important; }
 
-    /* =====================================================
-       UMUM
-       ===================================================== */
     .stButton > button {
         background: linear-gradient(135deg, #1E40AF 0%, #3B82F6 100%);
         border: 1px solid #2563EB; color: white !important;
@@ -198,9 +187,6 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-# ==========================================
-# COOKIE MANAGER (persist session)
-# ==========================================
 def get_cookie_manager():
     if not _HAS_COOKIES:
         return None
@@ -209,9 +195,6 @@ def get_cookie_manager():
 cookie_manager = get_cookie_manager()
 
 
-# ==========================================
-# SVG INLINE HELPER
-# ==========================================
 _SVG_PATHS = {
     "check":      '<polyline points="20 6 9 17 4 12"/>',
     "x":          '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
@@ -243,9 +226,6 @@ def svg_html(name, text, size=16, color="#38BDF8"):
     return f"{svg(name, size, color)} <span style='vertical-align:middle;'>{text}</span>"
 
 
-# ==========================================
-# 1. S3 WORKER + QUEUE
-# ==========================================
 @st.cache_resource
 def get_worker():
     class S3Worker:
@@ -310,7 +290,6 @@ def get_worker():
                 "meta": meta_raw,
             }
 
-            # --- MIGRASI: pastikan setiap item DB punya 'name' & 'id' unik ---
             _needs_mig = False
             for d in self.data["databases"]:
                 for n in d.get("numbers", []):
@@ -375,7 +354,6 @@ def get_worker():
             )
 
         def ensure_daily_reset(self):
-            # Catatan: texts.json dan popups.json TIDAK ikut terhapus harian
             today_str = today_wib_str()
             if self.last_reset_date == today_str:
                 return False
@@ -582,9 +560,6 @@ worker.ensure_daily_reset()
 worker.cleanup_expired_popups()
 
 
-# ==========================================
-# 2. HELPERS
-# ==========================================
 DB_STATUSES = ["Belum Dicek", "Tidak Terdaftar", "Terdaftar", "Dibaca", "Dibalas"]
 
 def gen_uid():
@@ -699,7 +674,7 @@ def render_eagle_wallet_card(balance, role_label, owner_name):
     bal_int = int(balance or 0)
     safe_owner = html.escape(owner_name or "")
     safe_role = html.escape(role_label or "Karyawan")
-    wib_now_txt = now_wib().strftime("%d %b %Y · %H:%M WIB")
+    wib_now_txt = now_wib().strftime("%d %b %Y | %H:%M WIB")
     card_html = f"""
     <!DOCTYPE html>
     <html>
@@ -712,19 +687,19 @@ def render_eagle_wallet_card(balance, role_label, owner_name):
             position: relative;
             border-radius: 24px;
             padding: 22px 22px 18px 22px;
-            color: #F8FAFC;
-            background: linear-gradient(135deg, #091534 0%, #16337A 45%, #0B63B8 82%, #0284C7 100%);
-            border: 1px solid rgba(56, 189, 248, 0.45);
-            box-shadow: 0 14px 34px rgba(14, 165, 233, 0.35), inset 0 1px 0 rgba(255,255,255,0.22);
+            color: #F0F9FF;
+            background: linear-gradient(135deg, #061333 0%, #0F2B6B 42%, #1D4ED8 78%, #0284C7 100%);
+            border: 1px solid rgba(56, 189, 248, 0.55);
+            box-shadow: 0 14px 34px rgba(14, 165, 233, 0.38), inset 0 1px 0 rgba(186, 230, 253, 0.25);
             overflow: hidden;
-            min-height: 218px;
+            min-height: 220px;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
         }}
         .shimmer {{
             position: absolute; top: -50%; left: -60%; width: 45%; height: 220%;
-            background: linear-gradient(115deg, transparent 20%, rgba(255,255,255,0.16) 50%, transparent 80%);
+            background: linear-gradient(115deg, transparent 20%, rgba(186, 230, 253, 0.2) 50%, transparent 80%);
             transform: rotate(22deg);
             animation: sweep 5.5s infinite ease-in-out;
             pointer-events: none;
@@ -735,8 +710,8 @@ def render_eagle_wallet_card(balance, role_label, owner_name):
             100% {{ left: 140%; }}
         }}
         .eagle-bg {{
-            position: absolute; right: -12px; bottom: -16px;
-            width: 175px; height: 175px; opacity: 0.16;
+            position: absolute; right: -10px; bottom: -14px;
+            width: 178px; height: 178px; opacity: 0.18;
             pointer-events: none;
             animation: floatWing 4.5s ease-in-out infinite;
         }}
@@ -745,9 +720,9 @@ def render_eagle_wallet_card(balance, role_label, owner_name):
             50% {{ transform: translateY(-5px) scale(1.03); }}
         }}
         .glow-orb {{
-            position: absolute; top: -40px; right: -30px;
-            width: 150px; height: 150px; border-radius: 50%;
-            background: radial-gradient(circle, rgba(250, 204, 21, 0.25) 0%, transparent 70%);
+            position: absolute; top: -45px; right: -30px;
+            width: 165px; height: 165px; border-radius: 50%;
+            background: radial-gradient(circle, rgba(56, 189, 248, 0.35) 0%, transparent 70%);
             pointer-events: none;
         }}
         .top-row {{
@@ -758,51 +733,52 @@ def render_eagle_wallet_card(balance, role_label, owner_name):
             display: flex; align-items: center; gap: 10px;
         }}
         .crest {{
-            width: 38px; height: 38px; border-radius: 12px;
-            background: linear-gradient(135deg, rgba(250,204,21,0.22), rgba(56,189,248,0.22));
-            border: 1px solid rgba(250,204,21,0.45);
+            width: 42px; height: 42px; border-radius: 50%;
+            background: radial-gradient(circle at center, rgba(56,189,248,0.28), rgba(15,23,42,0.85));
+            border: 1.5px solid rgba(56, 189, 248, 0.65);
             display: flex; align-items: center; justify-content: center;
-            box-shadow: 0 0 14px rgba(250,204,21,0.25);
+            box-shadow: 0 0 16px rgba(56, 189, 248, 0.35);
         }}
         .brand-text .title {{
-            font-size: 13px; font-weight: 700; letter-spacing: 0.6px; color: #E0F2FE;
+            font-size: 13px; font-weight: 800; letter-spacing: 0.8px; color: #E0F2FE;
             text-transform: uppercase;
         }}
         .brand-text .sub {{
-            font-size: 11px; color: #93C5FD; margin-top: 1px;
+            font-size: 11px; color: #93C5FD; margin-top: 2px;
         }}
         .eye-btn {{
-            background: rgba(15, 23, 42, 0.45);
-            border: 1px solid rgba(148, 163, 184, 0.35);
+            background: rgba(15, 23, 42, 0.5);
+            border: 1px solid rgba(56, 189, 248, 0.4);
             color: #E0F2FE; border-radius: 999px;
             padding: 6px 12px; font-size: 11px; font-weight: 600;
             cursor: pointer; display: flex; align-items: center; gap: 6px;
             backdrop-filter: blur(6px); transition: all 0.2s ease;
         }}
-        .eye-btn:hover {{ background: rgba(56, 189, 248, 0.25); border-color: #38BDF8; }}
+        .eye-btn:hover {{ background: rgba(56, 189, 248, 0.25); border-color: #7DD3FC; }}
         .mid-row {{
             position: relative; z-index: 2; margin: 16px 0 14px 0;
         }}
         .bal-label {{
             font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
-            color: #BAE6FD; opacity: 0.9; margin-bottom: 4px;
+            color: #BAE6FD; opacity: 0.92; margin-bottom: 4px;
         }}
         .bal-value {{
             font-size: 32px; font-weight: 800; letter-spacing: -0.5px;
-            background: linear-gradient(90deg, #FFFFFF 0%, #E0F2FE 65%, #FDE047 100%);
+            background: linear-gradient(90deg, #FFFFFF 0%, #BAE6FD 55%, #38BDF8 100%);
             -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-            text-shadow: 0 2px 12px rgba(0,0,0,0.18);
+            text-shadow: 0 2px 12px rgba(0,0,0,0.2);
         }}
         .bot-row {{
             display: flex; justify-content: space-between; align-items: center;
-            padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.18);
+            padding-top: 12px; border-top: 1px solid rgba(186, 230, 253, 0.2);
             position: relative; z-index: 2; font-size: 11px; color: #DBEAFE;
         }}
         .pill {{
-            background: linear-gradient(135deg, rgba(250,204,21,0.2), rgba(56,189,248,0.22));
-            border: 1px solid rgba(250,204,21,0.4);
-            color: #FEF08A; padding: 4px 10px; border-radius: 999px;
-            font-weight: 700; font-size: 10px; letter-spacing: 0.5px;
+            background: linear-gradient(135deg, rgba(14, 165, 233, 0.35), rgba(37, 99, 235, 0.45));
+            border: 1px solid rgba(125, 211, 252, 0.55);
+            color: #E0F2FE; padding: 4px 11px; border-radius: 999px;
+            font-weight: 700; font-size: 10px; letter-spacing: 0.7px;
+            box-shadow: 0 0 10px rgba(56, 189, 248, 0.25);
         }}
     </style>
     </head>
@@ -811,13 +787,14 @@ def render_eagle_wallet_card(balance, role_label, owner_name):
         <div class="shimmer"></div>
         <div class="glow-orb"></div>
 
-        <!-- Custom SVG Elang Sayap Terbentang (Watermark) -->
         <svg class="eagle-bg" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M100 32 C112 22, 130 24, 138 36 C126 36, 120 42, 118 50 C142 38, 174 34, 194 44 C174 58, 152 68, 132 72 C154 74, 174 82, 186 94 C162 98, 140 96, 120 90 C134 104, 142 122, 142 142 C126 130, 114 116, 106 100 L100 168 L94 100 C86 116, 74 130, 58 142 C58 122, 66 104, 80 90 C60 96, 38 98, 14 94 C26 82, 46 74, 68 72 C48 68, 26 58, 6 44 C26 34, 58 38, 82 50 C80 42, 74 36, 62 36 C70 24, 88 22, 100 32 Z" fill="url(#eagleGrad)"/>
+            <circle cx="100" cy="100" r="88" stroke="#7DD3FC" stroke-width="2" stroke-dasharray="6 4"/>
+            <path d="M100 32 C112 22, 130 24, 138 36 C126 36, 120 42, 118 50 C142 38, 174 34, 194 44 C174 58, 152 68, 132 72 C154 74, 174 82, 186 94 C162 98, 140 96, 120 90 C134 104, 142 122, 142 142 C126 130, 114 116, 106 100 L100 168 L94 100 C86 116, 74 130, 58 142 C58 122, 66 104, 80 90 C60 96, 38 98, 14 94 C26 82, 46 74, 68 72 C48 68, 26 58, 6 44 C26 34, 58 38, 82 50 C80 42, 74 36, 62 36 C70 24, 88 22, 100 32 Z" fill="url(#eagleBlueGrad)"/>
             <defs>
-                <linearGradient id="eagleGrad" x1="0" y1="0" x2="200" y2="200" gradientUnits="userSpaceOnUse">
-                    <stop offset="0%" stop-color="#FACC15"/>
-                    <stop offset="100%" stop-color="#38BDF8"/>
+                <linearGradient id="eagleBlueGrad" x1="0" y1="0" x2="200" y2="200" gradientUnits="userSpaceOnUse">
+                    <stop offset="0%" stop-color="#BAE6FD"/>
+                    <stop offset="50%" stop-color="#38BDF8"/>
+                    <stop offset="100%" stop-color="#1D4ED8"/>
                 </linearGradient>
             </defs>
         </svg>
@@ -825,16 +802,24 @@ def render_eagle_wallet_card(balance, role_label, owner_name):
         <div class="top-row">
             <div class="brand">
                 <div class="crest">
-                    <!-- Custom SVG Kepala Elang -->
-                    <svg width="24" height="24" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M14 48 C14 28, 26 14, 44 12 C40 17, 39 21, 41 25 C49 24, 55 27, 58 33 C51 32, 46 34, 43 38 C46 41, 46 47, 41 51 C34 48, 26 48, 14 48 Z" fill="#FACC15"/>
-                        <path d="M44 27 C49 27, 54 29, 57 33 C52 33, 47 35, 44 38 L39 33 Z" fill="#F59E0B"/>
-                        <circle cx="35" cy="24" r="2.6" fill="#0F172A"/>
+                    <svg width="28" height="28" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <circle cx="32" cy="32" r="27" stroke="#38BDF8" stroke-width="1.8" stroke-dasharray="3 2"/>
+                        <path d="M16 46 C16 28, 26 15, 43 13 C39 18, 38 22, 40 25 C47 24, 53 27, 56 32 C50 31, 45 33, 42 37 C45 40, 44 45, 39 49 C33 46, 25 46, 16 46 Z" fill="url(#headBlue)"/>
+                        <path d="M43 26 C48 26, 53 28, 56 32 C51 32, 46 34, 43 37 L38 32 Z" fill="#F59E0B"/>
+                        <circle cx="35" cy="23.5" r="2.2" fill="#0F172A"/>
+                        <circle cx="35.6" cy="23" r="0.8" fill="#BAE6FD"/>
+                        <defs>
+                            <linearGradient id="headBlue" x1="16" y1="13" x2="46" y2="49" gradientUnits="userSpaceOnUse">
+                                <stop offset="0%" stop-color="#7DD3FC"/>
+                                <stop offset="55%" stop-color="#3B82F6"/>
+                                <stop offset="100%" stop-color="#1E3A8A"/>
+                            </linearGradient>
+                        </defs>
                     </svg>
                 </div>
                 <div class="brand-text">
-                    <div class="title">Dompet Elang</div>
-                    <div class="sub">{safe_owner} · {safe_role}</div>
+                    <div class="title">Elang Pintar</div>
+                    <div class="sub">{safe_owner} | {safe_role}</div>
                 </div>
             </div>
             <button class="eye-btn" id="toggleBtn" onclick="toggleBalance()">
@@ -843,13 +828,13 @@ def render_eagle_wallet_card(balance, role_label, owner_name):
         </div>
 
         <div class="mid-row">
-            <div class="bal-label">Total Saldo Gaji</div>
+            <div class="bal-label">Saldo Gaji</div>
             <div class="bal-value" id="balText">Rp 0</div>
         </div>
 
         <div class="bot-row">
             <span>{wib_now_txt}</span>
-            <span class="pill">ELANG GOLD</span>
+            <span class="pill">ELANG PINTAR</span>
         </div>
     </div>
 
@@ -878,7 +863,7 @@ def render_eagle_wallet_card(balance, role_label, owner_name):
         function toggleBalance() {{
             hidden = !hidden;
             if (hidden) {{
-                balEl.textContent = "Rp ••••••••";
+                balEl.textContent = "Rp ********";
                 eyeLabel.textContent = "Tampilkan";
             }} else {{
                 balEl.textContent = fmtRp(target);
@@ -891,12 +876,9 @@ def render_eagle_wallet_card(balance, role_label, owner_name):
     </body>
     </html>
     """
-    components.html(card_html, height=238, scrolling=False)
+    components.html(card_html, height=240, scrolling=False)
 
 
-# ==========================================
-# 3. AUTENTIKASI
-# ==========================================
 def read_session_cookie(cookie_tokens):
     tok = None
     if isinstance(cookie_tokens, dict):
@@ -965,7 +947,6 @@ def try_restore_session(tokens_dict):
     return True
 
 
-# Sinkronkan hapus cookie saat logout tanpa terpotong st.rerun()
 if st.session_state.get("_pending_cookie_delete"):
     existing_tok = read_session_cookie(cookie_tokens)
     tries = st.session_state.get("_cookie_del_tries", 0)
@@ -986,7 +967,6 @@ if "user" not in st.session_state:
     login_page()
     st.stop()
 
-# Sinkronkan simpan cookie setelah login tanpa terpotong st.rerun()
 _pending_tok = st.session_state.get("_pending_cookie_set")
 if _pending_tok:
     if cookie_tokens.get("elang_session_token") == _pending_tok:
@@ -1023,10 +1003,7 @@ user = next((u for u in worker.data["users"] if u["uid"] == st.session_state.use
 st.session_state.user = user
 
 
-# ==========================================
-# 3B. POPUP MODAL UNTUK KARYAWAN
-# ==========================================
-@st.dialog("📢 Pengumuman Dari Admin")
+@st.dialog("Pengumuman Dari Admin")
 def show_employee_popups(active_popups, current_user):
     for idx, p in enumerate(active_popups):
         if idx > 0:
@@ -1078,9 +1055,6 @@ st.markdown(
 )
 
 
-# ==========================================
-# 4. ROUTING NAV BAWAH  (WAJIB dibungkus container key="nav_bottom")
-# ==========================================
 def nav_icon(name, label):
     url = f"https://api.iconify.design/ph/{name}.svg?color=%238A99AD"
     return f"![icon]({url})\n{label}"
@@ -1116,9 +1090,6 @@ with st.container(key="nav_bottom"):
         )
 
 
-# ==========================================
-# 5. HALAMAN AKUN (TANPA WITHDRAW, KARTU SALDO ELANG SVG+JS)
-# ==========================================
 if page == "Akun":
     st.markdown(f"""
     <div class="profile-card">
@@ -1131,7 +1102,7 @@ if page == "Akun":
     """, unsafe_allow_html=True)
 
     my_payroll = worker.data["payroll"].get(user["name"], 0)
-    role_txt = "Administrator" if user["role"] == "admin" else "Karyawan ElangPintar"
+    role_txt = "Administrator" if user["role"] == "admin" else "Karyawan Elang Pintar"
     render_eagle_wallet_card(my_payroll, role_txt, user["name"])
 
     tg_raw = user.get("telegram", "").strip().lstrip("@")
@@ -1211,9 +1182,6 @@ if page == "Akun":
         st.rerun()
 
 
-# ==========================================
-# 6. HALAMAN ADMIN
-# ==========================================
 elif user["role"] == "admin":
     if page == "Employee":
         st.header("Manajemen Karyawan")
@@ -1276,14 +1244,14 @@ elif user["role"] == "admin":
         with tab3:
             karyawan_list = [u["name"] for u in worker.data["users"] if u["role"] == "karyawan"]
             if karyawan_list:
-                st.info("Database dikirimkan"
+                st.info("Database dikirim secara privat — hanya karyawan terpilih yang bisa melihat. "
                         "Format: **1 baris = 1 DB** — `DB Nama` (pisahkan DB dan nama dengan spasi).")
                 target = st.selectbox("Pilih Karyawan", karyawan_list, key="givedb_target")
 
                 existing_db = next((d for d in worker.data["databases"] if d["name"] == target), None)
                 replace_mode = "replace_drop"
                 if existing_db and existing_db.get("numbers"):
-                    st.warning(f"⚠️ **{target}** saat ini masih memiliki **{len(existing_db['numbers'])} DB aktif**.")
+                    st.warning(f"**{target}** saat ini masih memiliki **{len(existing_db['numbers'])} DB aktif**.")
                     replace_mode = st.radio(
                         "Perlakuan terhadap DB lama saat mengirim DB baru:",
                         [
@@ -1348,12 +1316,12 @@ elif user["role"] == "admin":
                             save_users_sync()
 
                         save_key_sync("databases.json")
-                        st.success(f"✅ {len(parsed)} DB dikirim privat ke {target}. Notifikasi terkirim.")
+                        st.success(f"{len(parsed)} DB dikirim privat ke {target}. Notifikasi terkirim.")
                         st.rerun()
 
                 st.divider()
                 st.subheader("Tarik / Cabut DB Karyawan")
-                st.caption("Cabut DB yang sudah dikirim (misal jika salah kirim) kapan saja.")
+                st.caption("Cabut DB yang sudah dikirim kapan saja.")
                 active_db_owners = [d["name"] for d in worker.data["databases"] if d.get("numbers")]
                 if not active_db_owners:
                     st.info("Saat ini tidak ada karyawan yang memiliki DB aktif.")
@@ -1411,7 +1379,7 @@ elif user["role"] == "admin":
                                     notify=notify_emp
                                 )
                                 st.success(
-                                    f"✅ {count_rev} DB milik {rev_target} berhasil ditarik "
+                                    f"{count_rev} DB milik {rev_target} berhasil ditarik "
                                     f"({'statistik dipertahankan' if keep_stats else 'pengaruh DB dihapus dari statistik'})."
                                 )
                                 st.rerun()
@@ -1420,7 +1388,7 @@ elif user["role"] == "admin":
 
         with tab4:
             st.subheader("Tambah Teks & Foto Baru")
-            st.caption("Teks dan foto di sini **tersimpan permanen** (tidak ikut terhapus otomatis harian).")
+            st.caption("Teks dan foto tersimpan permanen dan tidak terhapus otomatis harian.")
             with st.form("add_new_text_form"):
                 new_title = st.text_input("Nama / Judul Teks")
                 new_content = st.text_area("Isi Teks (opsional jika hanya mengirim foto)", height=140)
@@ -1455,8 +1423,8 @@ elif user["role"] == "admin":
                 st.info("Belum ada teks yang tersimpan.")
             else:
                 for idx, t in enumerate(worker.data["texts"]):
-                    has_img = " 🖼️" if t.get("image_key") else ""
-                    with st.expander(f"📄 {t['title']}{has_img}"):
+                    has_img = " [Foto]" if t.get("image_key") else ""
+                    with st.expander(f"{t['title']}{has_img}"):
                         if t.get("image_key"):
                             cur_url = worker.media_link(t["image_key"])
                             if cur_url:
@@ -1496,7 +1464,7 @@ elif user["role"] == "admin":
 
         with tab5:
             st.subheader("Kirim PopUp ke Karyawan")
-            st.caption("PopUp langsung muncul sebagai jendela pengumuman di layar karyawan dan otomatis terhapus saat waktu berakhir.")
+            st.caption("PopUp langsung tampil di layar karyawan dan otomatis terhapus saat waktu berakhir.")
 
             karyawan_list = [u["name"] for u in worker.data["users"] if u["role"] == "karyawan"]
             target_options = ["all"] + karyawan_list
@@ -1507,7 +1475,7 @@ elif user["role"] == "admin":
                 format_func=lambda x: "Semua Karyawan" if x == "all" else x,
                 key="popup_target_sel"
             )
-            p_title = st.text_input("Judul PopUp", placeholder="Contoh: Promo / Arahan Penting Hari Ini", key="popup_title_in")
+            p_title = st.text_input("Judul PopUp", placeholder="Contoh: Arahan Penting Hari Ini", key="popup_title_in")
             p_msg = st.text_area("Pesan PopUp (opsional jika hanya kirim foto)", height=120, key="popup_msg_in")
             p_img = st.file_uploader("Foto PopUp (Opsional - PNG/JPG/WEBP)", type=["png", "jpg", "jpeg", "webp"], key="popup_img_in")
 
@@ -1540,7 +1508,7 @@ elif user["role"] == "admin":
                 expires_dt = datetime.combine(exp_date, exp_time)
 
             allow_dismiss = st.checkbox(
-                "Izinkan karyawan menutup permanen (jika tidak dicentang, popup hanya tertutup per sesi & muncul lagi saat refresh sampai waktu habis)",
+                "Izinkan karyawan menutup permanen (jika tidak dicentang, popup hanya tertutup per sesi dan muncul lagi saat refresh sampai waktu habis)",
                 value=True,
                 key="popup_allow_dismiss"
             )
@@ -1571,7 +1539,7 @@ elif user["role"] == "admin":
                         "expires_at": expires_dt.isoformat()
                     })
                     save_key_sync("popups.json")
-                    st.success(f"✅ PopUp aktif sampai {expires_dt.strftime('%d %b %Y %H:%M WIB')}!")
+                    st.success(f"PopUp aktif sampai {expires_dt.strftime('%d %b %Y %H:%M WIB')}!")
                     st.rerun()
 
             st.divider()
@@ -1584,7 +1552,7 @@ elif user["role"] == "admin":
                 for p_idx, p in enumerate(list(active_popups_list)):
                     tgt_lbl = "Semua Karyawan" if p.get("target") == "all" else p.get("target", "-")
                     rem_lbl = fmt_remaining(p.get("expires_at", ""))
-                    with st.expander(f" {p.get('title','PopUp')} → {tgt_lbl} (Sisa: {rem_lbl})"):
+                    with st.expander(f"{p.get('title','PopUp')} -> {tgt_lbl} (Sisa: {rem_lbl})"):
                         if p.get("image_key"):
                             p_url = worker.media_link(p["image_key"])
                             if p_url:
@@ -1708,7 +1676,7 @@ elif user["role"] == "admin":
 
             if pres_total > 0:
                 st.info(
-                    f"📊 Termasuk **{pres_total} DB yang telah dicabut** (statistik dipertahankan): "
+                    f"Termasuk **{pres_total} DB yang telah dicabut** (statistik dipertahankan): "
                     f"Dicek **{pres_done}**, Dibalas **{pres_dibalas}**."
                 )
                 if st.button("Hapus Pengaruh DB Tarikan dari Statistik", key=f"clr_pres_{selected}", icon=":material/delete_sweep:"):
@@ -1794,7 +1762,7 @@ elif user["role"] == "admin":
                                     keep_stats=an_keep,
                                     notify=an_notify
                                 )
-                                st.success(f"✅ {count_rev} DB berhasil ditarik.")
+                                st.success(f"{count_rev} DB berhasil ditarik.")
                                 st.rerun()
                 else:
                     st.caption("Saat ini karyawan tidak memiliki DB aktif (hanya statistik DB yang dipertahankan).")
@@ -2047,9 +2015,6 @@ elif user["role"] == "admin":
                     for idx, v in lalu_items: render_video(idx, v, "l")
 
 
-# ==========================================
-# 7. HALAMAN KARYAWAN
-# ==========================================
 else:
     if page == "Data":
         st.header("Database Kerja Saya")
@@ -2256,7 +2221,7 @@ else:
         else:
             for t in worker.data["texts"]:
                 with st.container(border=True):
-                    st.subheader(f" {t['title']}")
+                    st.subheader(t['title'])
                     if t.get("image_key"):
                         img_url = worker.media_link(t["image_key"])
                         if img_url:
@@ -2272,4 +2237,4 @@ else:
                             )
                     if t.get("content"):
                         st.code(t["content"], language="text")
-                        st.caption(" *Klik ikon copy di pojok kanan atas kotak untuk menyalin teks.*")
+                        st.caption("*Klik ikon copy di pojok kanan atas kotak untuk menyalin teks.*")
