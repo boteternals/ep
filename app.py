@@ -1924,9 +1924,16 @@ elif user["role"] == "admin":
             st.info("Belum ada karyawan.")
         else:
             selected = st.selectbox("Pilih Karyawan", employees)
+            today_prefix = today_wib_str()
 
-            ndp_approved = [r for r in worker.data["reports"]["ndp"]
-                            if r["user"] == selected and r.get("status") == "approved"]
+            def _is_today(ts_str):
+                return str(ts_str or "").startswith(today_prefix)
+
+            ndp_today_all = [
+                r for r in worker.data["reports"]["ndp"]
+                if r["user"] == selected and _is_today(r.get("time"))
+            ]
+            ndp_approved = [r for r in ndp_today_all if r.get("status") == "approved"]
             total_ndp = sum(r.get("count", 0) for r in ndp_approved)
 
             my_db = next((d for d in worker.data["databases"] if d["name"] == selected), None)
@@ -1948,53 +1955,67 @@ elif user["role"] == "admin":
             tidak_db = active_tidak + pres_tidak
             dibalas_db = active_dibalas + pres_dibalas
 
-            ndp_vid_approved = sum(
-                1 for n in worker.data["reports"]["ndp"]
-                if n["user"] == selected and n.get("status") == "approved" and n.get("video_key")
-            )
-            ndp_vid_pending = sum(
-                1 for n in worker.data["reports"]["ndp"]
-                if n["user"] == selected and n.get("status", "pending") == "pending" and n.get("video_key")
-            )
-            stand_vid_approved = sum(
-                1 for v in worker.data["reports"]["video"]
-                if v["user"] == selected and v.get("status") == "approved"
-            )
-            stand_vid_pending = sum(
-                1 for v in worker.data["reports"]["video"]
-                if v["user"] == selected and v.get("status", "pending") == "pending"
-            )
-
-            video_approved = ndp_vid_approved + stand_vid_approved
-            video_pending  = ndp_vid_pending + stand_vid_pending
-            vid_total = video_approved + video_pending
-
+            # Hanya hitung DB valid yang SUDAH dicek sebagai pembagi rasio balasan
+            valid_checked = max(done_db - tidak_db, 0)
             checked_pct = (done_db / total_db * 100) if total_db > 0 else 0.0
-            valid_pool = max(total_db - tidak_db, 0)
+
             if total_db == 0:
                 reply_pct = 0.0
                 db_pct = 0.0
-            elif valid_pool == 0:
-                reply_pct = 100.0 if done_db == total_db else 0.0
-                db_pct = checked_pct
+            elif valid_checked == 0:
+                reply_pct = 0.0
+                db_pct = checked_pct * 0.5
             else:
-                reply_pct = dibalas_db / valid_pool * 100
-                db_pct = (checked_pct + reply_pct) / 2
+                reply_pct = (dibalas_db / valid_checked) * 100
+                db_pct = (checked_pct * 0.6) + (reply_pct * 0.4)
 
-            video_pct = (video_approved / vid_total * 100) if vid_total > 0 else 0.0
-            kinerja = (db_pct + video_pct) / 2
+            # Hitung Video hari ini (termasuk rejected di penyebut agar penolakan mengurangi akurasi)
+            vid_today_all = [
+                v for v in worker.data["reports"]["video"]
+                if v["user"] == selected and _is_today(v.get("time"))
+            ]
+            ndp_vid_approved = sum(1 for n in ndp_today_all if n.get("status") == "approved" and n.get("video_key"))
+            ndp_vid_rejected = sum(1 for n in ndp_today_all if n.get("status") == "rejected" and n.get("video_key"))
+            stand_vid_approved = sum(1 for v in vid_today_all if v.get("status") == "approved")
+            stand_vid_rejected = sum(1 for v in vid_today_all if v.get("status") == "rejected")
+
+            video_approved = ndp_vid_approved + stand_vid_approved
+            video_reviewed = video_approved + ndp_vid_rejected + stand_vid_rejected
+            video_pct = (video_approved / video_reviewed * 100) if video_reviewed > 0 else None
+
+            # Konversi NDP terhadap nomor yang dibalas / valid dicek
+            ndp_base = max(dibalas_db, valid_checked)
+            ndp_pct = min((total_ndp / ndp_base) * 100, 100.0) if ndp_base > 0 else 0.0
+
+            # Gabungkan hanya komponen aktif secara proporsional
+            weights = []
+            if total_db > 0:
+                weights.append((db_pct, 0.50))
+                weights.append((ndp_pct, 0.30))
+            elif total_ndp > 0:
+                weights.append((100.0, 0.30))
+            if video_pct is not None:
+                weights.append((video_pct, 0.20))
+
+            if weights:
+                total_w = sum(w for _, w in weights)
+                kinerja = sum(val * w for val, w in weights) / total_w
+            else:
+                kinerja = 0.0
 
             c1, c2, c3, c4 = st.columns(4)
-            c1.metric("NDP", total_ndp)
+            c1.metric("NDP (Hari Ini)", total_ndp)
             c2.metric("DB Dicek", f"{done_db}/{total_db}")
-            c3.metric("Video", f"{video_approved}/{vid_total}")
+            c3.metric("Video", f"{video_approved}/{video_reviewed}")
             c4.metric("Kinerja", f"{kinerja:.1f}%")
 
             st.progress(min(kinerja / 100, 1.0))
+            vid_lbl = f"{video_pct:.1f}%" if video_pct is not None else "N/A"
             st.caption(
                 f"Progres Cek DB: **{checked_pct:.1f}%** | "
-                f"Rasio Dibalas (dari DB valid/belum dicek): **{reply_pct:.1f}%** | "
-                f"Video Approved: **{video_pct:.1f}%**"
+                f"Rasio Dibalas (dari DB valid dicek): **{reply_pct:.1f}%** | "
+                f"Konversi NDP: **{ndp_pct:.1f}%** | "
+                f"Akurasi Video: **{vid_lbl}**"
             )
 
             if pres_total > 0:
@@ -2606,3 +2627,4 @@ else:
                     if t.get("content"):
                         st.code(t["content"], language="text")
                         st.caption("*Klik ikon copy di pojok kanan atas kotak untuk menyalin teks.*")
+
