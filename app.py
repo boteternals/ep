@@ -483,6 +483,10 @@ def get_worker():
                 self._save("databases.json", self.data["databases"])
 
             self.last_reset_date = self.data["meta"].get("last_reset_date") or today_wib_str()
+            self.last_wednesday_reset = self.data["meta"].get("last_wednesday_reset") or self._current_wednesday_str()
+            if not self.data["meta"].get("last_wednesday_reset"):
+                self.data["meta"]["last_wednesday_reset"] = self.last_wednesday_reset
+                self._save("meta.json", self.data["meta"])
 
             admin_uid = st.secrets.get("ADMIN_UID", "admin")
             admin_pwd = st.secrets.get("ADMIN_PASSWORD", "admin123")
@@ -533,24 +537,59 @@ def get_worker():
                 ContentType="application/json"
             )
 
+        def _current_wednesday_str(self):
+            now_dt = now_wib()
+            # Senin=0, Selasa=1, Rabu=2, Kamis=3, Jumat=4, Sabtu=5, Minggu=6
+            days_since_wed = (now_dt.weekday() - 2) % 7
+            wed_date = now_dt.date() - timedelta(days=days_since_wed)
+            return wed_date.isoformat()
+
         def ensure_daily_reset(self):
             today_str = today_wib_str()
-            if self.last_reset_date == today_str:
+            wed_str = self._current_wednesday_str()
+            if self.last_reset_date == today_str and self.last_wednesday_reset == wed_str:
                 return False
             with self.lock:
                 today_str = today_wib_str()
-                if self.last_reset_date == today_str:
-                    return False
-                self.data["databases"] = []
-                self.data["sessions"] = {}
-                self.data["db_stats"] = {}
-                self.data["meta"] = {"last_reset_date": today_str}
-                self._save("databases.json", [])
-                self._save("sessions.json", {})
-                self._save("db_stats.json", {})
-                self._save("meta.json", self.data["meta"])
-                self.last_reset_date = today_str
-                return True
+                wed_str = self._current_wednesday_str()
+                changed_meta = False
+
+                # Pembersihan sesi harian (login berakhir 00:00 WIB)
+                if self.last_reset_date != today_str:
+                    self._cleanup_expired_sessions()
+                    self.data["meta"]["last_reset_date"] = today_str
+                    self.last_reset_date = today_str
+                    changed_meta = True
+
+                # Jumlah DB dan semua statistik HANYA terhapus ketika hari Rabu
+                if self.last_wednesday_reset != wed_str:
+                    self.data["databases"] = []
+                    self.data["db_stats"] = {}
+                    for v in self.data.get("reports", {}).get("video", []):
+                        if v.get("key"):
+                            try:
+                                self.s3.delete_object(Bucket=self.bucket, Key=v["key"])
+                            except Exception:
+                                pass
+                    for n in self.data.get("reports", {}).get("ndp", []):
+                        if n.get("video_key"):
+                            try:
+                                self.s3.delete_object(Bucket=self.bucket, Key=n["video_key"])
+                            except Exception:
+                                pass
+                    self.data["reports"]["ndp"] = []
+                    self.data["reports"]["video"] = []
+                    self.data["meta"]["last_wednesday_reset"] = wed_str
+                    self._save("databases.json", [])
+                    self._save("db_stats.json", {})
+                    self._save("reports.json", self.data["reports"])
+                    self.last_wednesday_reset = wed_str
+                    changed_meta = True
+
+                if changed_meta:
+                    self._save("meta.json", self.data["meta"])
+                    return True
+                return False
 
         def cleanup_expired_popups(self):
             now_iso = now_wib().isoformat()
@@ -1566,81 +1605,222 @@ elif user["role"] == "admin":
 
         with tab3:
             karyawan_list = [u["name"] for u in worker.data["users"] if u["role"] == "karyawan"]
+            active_karyawan_list = [u["name"] for u in worker.data["users"] if u["role"] == "karyawan" and not u.get("banned")]
             if karyawan_list:
-                st.info("Database dikirim secara privat — hanya karyawan terpilih yang bisa melihat. "
-                        "Format: **1 baris = 1 DB** — `DB Nama` (pisahkan DB dan nama dengan spasi).")
-                target = st.selectbox("Pilih Karyawan", karyawan_list, key="givedb_target")
-
-                existing_db = next((d for d in worker.data["databases"] if d["name"] == target), None)
-                replace_mode = "replace_drop"
-                if existing_db and existing_db.get("numbers"):
-                    st.warning(f"**{target}** saat ini masih memiliki **{len(existing_db['numbers'])} DB aktif**.")
-                    replace_mode = st.radio(
-                        "Perlakuan terhadap DB lama saat mengirim DB baru:",
-                        [
-                            "replace_drop",
-                            "replace_keep",
-                            "append"
-                        ],
-                        format_func=lambda x: {
-                            "replace_drop": "Ganti DB lama & hapus pengaruh DB lama dari statistik",
-                            "replace_keep": "Ganti DB lama & pertahankan pengaruh DB lama di statistik",
-                            "append": "Tambahkan ke DB yang sudah ada",
-                        }[x],
-                        key="givedb_replace_mode"
-                    )
-
-                db_input = st.text_area(
-                    "Input Database",
-                    placeholder="Contoh:\n628123456789 Budi\n628987654321 Siti\n628555555555 Andi Wijaya",
-                    height=220,
-                    key="givedb_input"
+                st.info(
+                    "Database dikirim secara privat & terakumulasi hingga reset otomatis setiap **Hari Rabu**. "
+                    "Target minimal **100 DB** per karyawan agar gaji tidak terpotong. "
+                    "Format: **1 baris = 1 DB** — `DB Nama`."
+                )
+                dist_mode = st.radio(
+                    "Mode Pengiriman DB",
+                    ["Pembagian DB (Banyak Karyawan)", "Kirim Privat (1 Karyawan)"],
+                    horizontal=True,
+                    key="givedb_dist_mode"
                 )
 
-                if st.button("Kirim DB Privat", icon=":material/send:") and db_input.strip():
-                    parsed = []
-                    for line in db_input.splitlines():
-                        line = line.strip()
-                        if not line:
-                            continue
-                        parts = line.split(None, 1)
-                        num = parts[0]
-                        nm = parts[1].strip() if len(parts) > 1 else ""
-                        parsed.append({
-                            "id": uuid.uuid4().hex,
-                            "num": num,
-                            "name": nm,
-                            "status": "Belum Dicek"
-                        })
+                if dist_mode == "Pembagian DB (Banyak Karyawan)":
+                    st.subheader("Pembagian Database ke Karyawan")
+                    default_targets = active_karyawan_list if active_karyawan_list else karyawan_list
+                    selected_emps = st.multiselect(
+                        "Pilih Karyawan Penerima Pembagian",
+                        karyawan_list,
+                        default=default_targets,
+                        key="split_db_targets"
+                    )
+                    split_method = st.radio(
+                        "Metode Pembagian",
+                        ["Bagi Rata Otomatis", "Atur Jumlah Manual per Karyawan"],
+                        horizontal=True,
+                        key="split_db_method"
+                    )
+                    split_existing_mode = st.radio(
+                        "Perlakuan terhadap DB yang sudah ada:",
+                        ["append", "replace_keep", "replace_drop"],
+                        format_func=lambda x: {
+                            "append": "Tambahkan ke DB yang sudah ada (Direkomendasikan agar capai 100 DB)",
+                            "replace_keep": "Ganti DB lama & pertahankan statistik DB lama",
+                            "replace_drop": "Ganti DB lama & hapus statistik DB lama",
+                        }[x],
+                        key="split_existing_mode"
+                    )
+                    bulk_db_input = st.text_area(
+                        "Input Daftar Database untuk Dibagikan",
+                        placeholder="Contoh:\n628123456789 Budi\n628987654321 Siti\n628555555555 Andi Wijaya",
+                        height=200,
+                        key="split_db_input"
+                    )
+                    raw_lines = [ln.strip() for ln in bulk_db_input.splitlines() if ln.strip()]
+                    total_avail = len(raw_lines)
+                    st.caption(f"Total baris DB siap dibagikan: **{total_avail}** DB")
 
-                    if not parsed:
-                        st.error("Tidak ada baris valid.")
-                    else:
-                        if existing_db and existing_db.get("numbers") and replace_mode == "append":
-                            existing_db["numbers"].extend(parsed)
+                    allocations = {}
+                    if selected_emps and total_avail > 0:
+                        if split_method == "Bagi Rata Otomatis":
+                            n_emp = len(selected_emps)
+                            base_q, rem_q = divmod(total_avail, n_emp)
+                            for idx_e, ename in enumerate(selected_emps):
+                                allocations[ename] = base_q + (1 if idx_e < rem_q else 0)
                         else:
-                            if existing_db and existing_db.get("numbers") and replace_mode == "replace_keep":
-                                archive_db_items(target, existing_db["numbers"])
-                                save_key_sync("db_stats.json")
-                            worker.data["databases"] = [d for d in worker.data["databases"] if d["name"] != target]
-                            worker.data["databases"].append({
-                                "name": target,
-                                "numbers": parsed
-                            })
+                            st.write("**Tentukan Kuota DB per Karyawan:**")
+                            default_each = total_avail // len(selected_emps)
+                            for ename in selected_emps:
+                                cur_cnt = len(next((d["numbers"] for d in worker.data["databases"] if d["name"] == ename), []))
+                                allocations[ename] = st.number_input(
+                                    f"{ename} (DB aktif saat ini: {cur_cnt})",
+                                    min_value=0,
+                                    max_value=total_avail,
+                                    value=min(default_each, total_avail),
+                                    step=1,
+                                    key=f"manual_quota_{ename}"
+                                )
 
-                        target_u = next((u for u in worker.data["users"] if u["name"] == target), None)
-                        if target_u:
-                            target_u.setdefault("notifications", []).append({
-                                "type": "db",
-                                "message": f"Anda menerima {len(parsed)} database baru dari admin",
-                                "read": False,
-                                "time": str(now_wib())
+                        total_allocated = sum(allocations.values())
+                        preview_rows = []
+                        for ename in selected_emps:
+                            cur_cnt = len(next((d["numbers"] for d in worker.data["databases"] if d["name"] == ename), []))
+                            add_cnt = allocations.get(ename, 0)
+                            after_cnt = (cur_cnt + add_cnt) if split_existing_mode == "append" else add_cnt
+                            status_100 = "Tercapai (>=100)" if after_cnt >= 100 else f"Kurang {100 - after_cnt} DB"
+                            preview_rows.append({
+                                "Karyawan": ename,
+                                "DB Sebelum": cur_cnt,
+                                "DB Dibagikan": add_cnt,
+                                "Total DB Nanti": after_cnt,
+                                "Target Min 100 DB": status_100,
                             })
+                        st.dataframe(preview_rows, use_container_width=True, hide_index=True)
+
+                        if total_allocated > total_avail:
+                            st.error(f"Total alokasi ({total_allocated}) melebihi jumlah DB yang diinput ({total_avail}).")
+                        elif total_allocated < total_avail:
+                            st.warning(f"Sisa **{total_avail - total_allocated}** DB belum teralokasi dan tidak akan dikirim.")
+
+                    if st.button("Bagikan DB Sekarang", type="primary", icon=":material/call_split:", key="btn_exec_split_db"):
+                        if not selected_emps:
+                            st.error("Pilih minimal 1 karyawan.")
+                        elif total_avail == 0:
+                            st.error("Masukkan daftar DB terlebih dahulu.")
+                        elif sum(allocations.values()) <= 0:
+                            st.error("Total pembagian harus minimal 1 DB.")
+                        elif sum(allocations.values()) > total_avail:
+                            st.error("Total alokasi melebihi jumlah DB tersedia.")
+                        else:
+                            cursor = 0
+                            sent_summary = []
+                            for ename in selected_emps:
+                                qty = allocations.get(ename, 0)
+                                if qty <= 0:
+                                    continue
+                                slice_lines = raw_lines[cursor:cursor + qty]
+                                cursor += qty
+                                parsed_slice = []
+                                for line in slice_lines:
+                                    parts = line.split(None, 1)
+                                    parsed_slice.append({
+                                        "id": uuid.uuid4().hex,
+                                        "num": parts[0],
+                                        "name": parts[1].strip() if len(parts) > 1 else "",
+                                        "status": "Belum Dicek"
+                                    })
+                                ex_db = next((d for d in worker.data["databases"] if d["name"] == ename), None)
+                                if ex_db and ex_db.get("numbers") and split_existing_mode == "append":
+                                    ex_db["numbers"].extend(parsed_slice)
+                                else:
+                                    if ex_db and ex_db.get("numbers") and split_existing_mode == "replace_keep":
+                                        archive_db_items(ename, ex_db["numbers"])
+                                        save_key_sync("db_stats.json")
+                                    worker.data["databases"] = [d for d in worker.data["databases"] if d["name"] != ename]
+                                    worker.data["databases"].append({
+                                        "name": ename,
+                                        "numbers": parsed_slice
+                                    })
+                                target_u = next((u for u in worker.data["users"] if u["name"] == ename), None)
+                                if target_u:
+                                    target_u.setdefault("notifications", []).append({
+                                        "type": "db",
+                                        "message": f"Anda menerima pembagian {len(parsed_slice)} database baru dari admin.",
+                                        "read": False,
+                                        "time": str(now_wib())
+                                    })
+                                sent_summary.append(f"{ename}: {len(parsed_slice)} DB")
                             save_users_sync()
+                            save_key_sync("databases.json")
+                            st.success("Pembagian berhasil dikirim! (" + ", ".join(sent_summary) + ")")
+                            st.rerun()
+                else:
+                    target = st.selectbox("Pilih Karyawan", karyawan_list, key="givedb_target")
 
-                        save_key_sync("databases.json")
-                        st.success(f"{len(parsed)} DB dikirim privat ke {target}. Notifikasi terkirim.")
-                        st.rerun()
+                    existing_db = next((d for d in worker.data["databases"] if d["name"] == target), None)
+                    replace_mode = "replace_drop"
+                    if existing_db and existing_db.get("numbers"):
+                        st.warning(f"**{target}** saat ini masih memiliki **{len(existing_db['numbers'])} DB aktif**.")
+                        replace_mode = st.radio(
+                            "Perlakuan terhadap DB lama saat mengirim DB baru:",
+                            [
+                                "replace_drop",
+                                "replace_keep",
+                                "append"
+                            ],
+                            format_func=lambda x: {
+                                "replace_drop": "Ganti DB lama & hapus pengaruh DB lama dari statistik",
+                                "replace_keep": "Ganti DB lama & pertahankan pengaruh DB lama di statistik",
+                                "append": "Tambahkan ke DB yang sudah ada",
+                            }[x],
+                            key="givedb_replace_mode"
+                        )
+
+                    db_input = st.text_area(
+                        "Input Database",
+                        placeholder="Contoh:\n628123456789 Budi\n628987654321 Siti\n628555555555 Andi Wijaya",
+                        height=220,
+                        key="givedb_input"
+                    )
+
+                    if st.button("Kirim DB Privat", icon=":material/send:") and db_input.strip():
+                        parsed = []
+                        for line in db_input.splitlines():
+                            line = line.strip()
+                            if not line:
+                                continue
+                            parts = line.split(None, 1)
+                            num = parts[0]
+                            nm = parts[1].strip() if len(parts) > 1 else ""
+                            parsed.append({
+                                "id": uuid.uuid4().hex,
+                                "num": num,
+                                "name": nm,
+                                "status": "Belum Dicek"
+                            })
+
+                        if not parsed:
+                            st.error("Tidak ada baris valid.")
+                        else:
+                            if existing_db and existing_db.get("numbers") and replace_mode == "append":
+                                existing_db["numbers"].extend(parsed)
+                            else:
+                                if existing_db and existing_db.get("numbers") and replace_mode == "replace_keep":
+                                    archive_db_items(target, existing_db["numbers"])
+                                    save_key_sync("db_stats.json")
+                                worker.data["databases"] = [d for d in worker.data["databases"] if d["name"] != target]
+                                worker.data["databases"].append({
+                                    "name": target,
+                                    "numbers": parsed
+                                })
+
+                            target_u = next((u for u in worker.data["users"] if u["name"] == target), None)
+                            if target_u:
+                                target_u.setdefault("notifications", []).append({
+                                    "type": "db",
+                                    "message": f"Anda menerima {len(parsed)} database baru dari admin",
+                                    "read": False,
+                                    "time": str(now_wib())
+                                })
+                                save_users_sync()
+
+                            save_key_sync("databases.json")
+                            st.success(f"{len(parsed)} DB dikirim privat ke {target}. Notifikasi terkirim.")
+                            st.rerun()
 
                 st.divider()
                 st.subheader("Tarik / Cabut DB Karyawan")
@@ -1927,27 +2107,90 @@ elif user["role"] == "admin":
             st.info("Belum ada karyawan.")
         else:
             today_prefix = today_wib_str()
+            wed_cycle_start = worker._current_wednesday_str()
 
-            def _is_today(ts_str):
-                return str(ts_str or "").startswith(today_prefix)
+            default_sal_cfg = {
+                "min_db": 100,
+                "rate_dasar": 150,
+                "rate_ndp": 3000,
+                "komisi_omzet_pct": 3.0,
+                "bonus_5_ndp": 10000,
+                "potongan_tanpa_video_pct": 50,
+            }
+            sal_cfg = {**default_sal_cfg, **worker.data.get("meta", {}).get("salary_config", {})}
+
+            with st.expander("Pengaturan Tarif & Aturan Pembagian Gaji", expanded=False):
+                st.caption(
+                    "Aturan aktif: **Tidak ada Bonus Video**, **Tidak ada Bonus Tier**, "
+                    "**Bonus NDP hanya cair jika >= 5 NDP**, **DB < 100 memotong gaji secara proporsional**, "
+                    "dan **Wajib Upload Video Standalone (bukan video NDP)**."
+                )
+                sc_a, sc_b, sc_c = st.columns(3)
+                cfg_min_db = sc_a.number_input("Minimal DB Penuh", min_value=1, value=int(sal_cfg["min_db"]), step=10, key="cfg_min_db")
+                cfg_rate_dasar = sc_b.number_input("Rate Dasar / DB (Rp)", min_value=0, value=int(sal_cfg["rate_dasar"]), step=25, key="cfg_rate_dasar")
+                cfg_rate_ndp = sc_c.number_input("Komisi / NDP (Rp)", min_value=0, value=int(sal_cfg["rate_ndp"]), step=500, key="cfg_rate_ndp")
+
+                sc_d, sc_e, sc_f = st.columns(3)
+                cfg_bonus_5 = sc_d.number_input("Bonus Tepat >= 5 NDP (Rp)", min_value=0, value=int(sal_cfg["bonus_5_ndp"]), step=1000, key="cfg_bonus_5")
+                cfg_omzet_pct = sc_e.number_input("Komisi Omzet (%)", min_value=0.0, max_value=100.0, value=float(sal_cfg["komisi_omzet_pct"]), step=0.5, key="cfg_omzet_pct")
+                cfg_vid_pen = sc_f.number_input("Potongan Tanpa Video Upload (%)", min_value=0, max_value=100, value=int(sal_cfg["potongan_tanpa_video_pct"]), step=5, key="cfg_vid_pen")
+
+                if st.button("Simpan Pengaturan Gaji", icon=":material/save:", key="btn_save_sal_cfg"):
+                    worker.data["meta"]["salary_config"] = {
+                        "min_db": int(cfg_min_db),
+                        "rate_dasar": int(cfg_rate_dasar),
+                        "rate_ndp": int(cfg_rate_ndp),
+                        "komisi_omzet_pct": float(cfg_omzet_pct),
+                        "bonus_5_ndp": int(cfg_bonus_5),
+                        "potongan_tanpa_video_pct": int(cfg_vid_pen),
+                    }
+                    save_key_sync("meta.json")
+                    st.success("Pengaturan tarif gaji berhasil disimpan!")
+                    st.rerun()
+
+            def _in_period(ts_str, mode):
+                s_val = str(ts_str or "")
+                if mode == "Hari Ini":
+                    return s_val.startswith(today_prefix)
+                if mode == "Siklus Rabu (Mingguan)":
+                    return s_val[:10] >= wed_cycle_start
+                return True
 
             def _parse_omzet_from_caption(cap_str):
                 if not cap_str:
                     return 0
-                parts = [p.strip() for p in str(cap_str).split(":")]
-                if len(parts) >= 2:
-                    digits = re.sub(r"[^0-9]", "", parts[1])
-                    if digits:
-                        return int(digits)
+                raw = str(cap_str).strip()
+                parts = [p.strip() for p in raw.split(":")]
+
+                def _valid_nominal(txt):
+                    cleaned_prefix = re.sub(r"[^0-9+]", "", txt)
+                    if cleaned_prefix.startswith(("08", "628", "+62")):
+                        return 0
+                    m_short = re.fullmatch(r"([0-9]+(?:[.,][0-9]+)?)\s*(k|rb|ribu|jt|juta)", txt.lower())
+                    if m_short:
+                        num_val = float(m_short.group(1).replace(",", "."))
+                        mult = 1_000_000 if m_short.group(2) in ("jt", "juta") else 1_000
+                        val = int(round(num_val * mult))
+                        return val if 1_000 <= val <= 100_000_000 else 0
+                    digits = re.sub(r"[^0-9]", "", txt)
+                    if not digits or len(digits) > 9:
+                        return 0
+                    val = int(digits)
+                    return val if 1_000 <= val <= 100_000_000 else 0
+
+                if len(parts) >= 3:
+                    return _valid_nominal(parts[1])
+                if len(parts) == 2:
+                    return _valid_nominal(parts[1])
                 return 0
 
-            def _calc_emp_stats(u_obj, daily_only=True):
+            def _calc_emp_stats(u_obj, p_mode="Siklus Rabu (Mingguan)"):
                 ename = u_obj["name"]
                 euid = u_obj["uid"]
 
                 ndp_all = [
                     r for r in worker.data["reports"]["ndp"]
-                    if r["user"] == ename and (not daily_only or _is_today(r.get("time")))
+                    if r["user"] == ename and _in_period(r.get("time"), p_mode)
                 ]
                 ndp_approved = [r for r in ndp_all if r.get("status") == "approved"]
                 total_ndp = sum(r.get("count", 0) for r in ndp_approved)
@@ -1972,70 +2215,57 @@ elif user["role"] == "admin":
                 tidak_db = active_tidak + pres_tidak
                 dibalas_db = active_dibalas + pres_dibalas
 
+                # Video Standalone (menu Upload, BUKAN video NDP)
                 vid_all = [
                     v for v in worker.data["reports"]["video"]
-                    if v["user"] == ename and (not daily_only or _is_today(v.get("time")))
+                    if v["user"] == ename and _in_period(v.get("time"), p_mode)
                 ]
-                ndp_vid_app = sum(1 for n in ndp_all if n.get("status") == "approved" and n.get("video_key"))
-                ndp_vid_rej = sum(1 for n in ndp_all if n.get("status") == "rejected" and n.get("video_key"))
                 st_vid_app = sum(1 for v in vid_all if v.get("status") == "approved")
                 st_vid_rej = sum(1 for v in vid_all if v.get("status") == "rejected")
+                st_vid_pending = sum(1 for v in vid_all if v.get("status", "pending") == "pending")
+
+                ndp_vid_app = sum(1 for n in ndp_all if n.get("status") == "approved" and n.get("video_key"))
+                ndp_vid_rej = sum(1 for n in ndp_all if n.get("status") == "rejected" and n.get("video_key"))
 
                 video_approved = ndp_vid_app + st_vid_app
                 video_reviewed = video_approved + ndp_vid_rej + st_vid_rej
 
-                # Rasio NDP terhadap Total DB (%)
                 rasio_ndp = (total_ndp / total_db * 100) if total_db > 0 else 0.0
 
-                # Aturan baru: jika karyawan tidak mendapatkan NDP (total_ndp == 0), maka gaji = 0
-                if total_ndp <= 0:
-                    tier_pct = 0
-                    rate_dasar = 0
-                    rate_aktif = 0
-                    rate_vid = 0
+                min_db_req = max(int(sal_cfg["min_db"]), 1)
+                rate_dasar = int(sal_cfg["rate_dasar"])
+                rate_aktif = int(sal_cfg["rate_ndp"])
+                omzet_pct = float(sal_cfg["komisi_omzet_pct"])
+                bonus_5_val = int(sal_cfg["bonus_5_ndp"])
+                vid_pen_pct = int(sal_cfg["potongan_tanpa_video_pct"])
+
+                # Faktor kelengkapan DB (minimal 100 DB untuk gaji penuh; jika DB sedikit, gaji berkurang)
+                faktor_db = min(total_db / float(min_db_req), 1.0) if total_db > 0 else 0.0
+                # Wajib ada upload video standalone (bukan video NDP); jika tidak ada, gaji dikurangi
+                has_wajib_video = (st_vid_app >= 1)
+                faktor_video = 1.0 if has_wajib_video else max(1.0 - (vid_pen_pct / 100.0), 0.0)
+
+                if total_ndp <= 0 or total_db <= 0:
                     gaji_dasar = 0
                     komisi_omzet = 0
-                    bonus_aktif = 0
-                    bonus_video = 0
-                    bonus_tier = 0
+                    komisi_ndp = 0
+                    bonus_ndp = 0
+                    gaji_kotor = 0
+                    potongan_db = 0
+                    potongan_video = 0
                     total_gaji = 0
                 else:
-                    if rasio_ndp >= 3.15 and total_ndp >= 31:
-                        tier_pct = 15
-                        rate_dasar = 700
-                        rate_aktif = 11000
-                        rate_vid = 1000
-                        bonus_tier = max(total_ndp - 1, 1) * 10000
-                    elif rasio_ndp >= 3.00:
-                        tier_pct = 10
-                        rate_dasar = 650 if total_ndp >= 17 else 600
-                        rate_aktif = 10000
-                        rate_vid = 1000
-                        bonus_tier = max(total_ndp - 1, 1) * 10000
-                    elif rasio_ndp >= 2.00:
-                        tier_pct = 6
-                        rate_dasar = 350
-                        rate_aktif = 8000
-                        rate_vid = 1000
-                        bonus_tier = 10000 if total_ndp <= 2 else (total_ndp - 1) * 10000
-                    elif rasio_ndp >= 1.00:
-                        tier_pct = 5
-                        rate_dasar = 300
-                        rate_aktif = 6000
-                        rate_vid = 1000
-                        bonus_tier = 10000 if total_ndp <= 2 else (total_ndp - 1) * 10000
-                    else:
-                        tier_pct = 0
-                        rate_dasar = 200
-                        rate_aktif = 0
-                        rate_vid = 0
-                        bonus_tier = 0
-
                     gaji_dasar = total_db * rate_dasar
-                    komisi_omzet = round(total_omzet * (tier_pct / 100.0))
-                    bonus_aktif = total_ndp * rate_aktif
-                    bonus_video = video_approved * rate_vid
-                    total_gaji = gaji_dasar + komisi_omzet + bonus_aktif + bonus_video + bonus_tier
+                    komisi_ndp = total_ndp * rate_aktif
+                    komisi_omzet = round(total_omzet * (omzet_pct / 100.0))
+                    # Tidak ada bonus video & tidak ada bonus tier; hanya bonus NDP jika >= 5 NDP
+                    bonus_ndp = bonus_5_val if total_ndp >= 5 else 0
+
+                    gaji_kotor = gaji_dasar + komisi_ndp + komisi_omzet + bonus_ndp
+                    setelah_faktor_db = round(gaji_kotor * faktor_db)
+                    potongan_db = gaji_kotor - setelah_faktor_db
+                    total_gaji = round(setelah_faktor_db * faktor_video)
+                    potongan_video = setelah_faktor_db - total_gaji
 
                 # Skor Kinerja (%)
                 valid_checked = max(done_db - tidak_db, 0)
@@ -2076,18 +2306,23 @@ elif user["role"] == "admin":
                     "dibalas_db": dibalas_db,
                     "total_ndp": total_ndp,
                     "rasio_ndp": rasio_ndp,
-                    "tier_pct": tier_pct,
-                    "rate_vid": rate_vid,
                     "rate_dasar": rate_dasar,
                     "rate_aktif": rate_aktif,
                     "total_omzet": total_omzet,
+                    "st_vid_app": st_vid_app,
+                    "st_vid_pending": st_vid_pending,
+                    "has_wajib_video": has_wajib_video,
                     "video_approved": video_approved,
                     "video_reviewed": video_reviewed,
                     "gaji_dasar": gaji_dasar,
+                    "komisi_ndp": komisi_ndp,
                     "komisi_omzet": komisi_omzet,
-                    "bonus_aktif": bonus_aktif,
-                    "bonus_video": bonus_video,
-                    "bonus_tier": bonus_tier,
+                    "bonus_ndp": bonus_ndp,
+                    "gaji_kotor": gaji_kotor,
+                    "faktor_db": faktor_db,
+                    "faktor_video": faktor_video,
+                    "potongan_db": potongan_db,
+                    "potongan_video": potongan_video,
                     "total_gaji": total_gaji,
                     "kinerja": kinerja,
                     "checked_pct": checked_pct,
@@ -2103,13 +2338,13 @@ elif user["role"] == "admin":
 
             period_mode = st.radio(
                 "Periode Data Rekap",
-                ["Hari Ini", "Semua Waktu"],
+                ["Siklus Rabu (Mingguan)", "Hari Ini", "Semua Waktu"],
                 horizontal=True,
                 key="analytic_period_mode"
             )
-            is_daily = (period_mode == "Hari Ini")
+            st.caption(f"Siklus mingguan aktif sejak **Rabu ({wed_cycle_start})** — DB & statistik otomatis direset setiap **Hari Rabu**.")
 
-            all_stats = [_calc_emp_stats(u, daily_only=is_daily) for u in emp_users]
+            all_stats = [_calc_emp_stats(u, p_mode=period_mode) for u in emp_users]
             all_stats.sort(key=lambda x: (x["total_gaji"], x["total_ndp"], x["total_db"]), reverse=True)
 
             # Ringkasan Global
@@ -2126,34 +2361,35 @@ elif user["role"] == "admin":
                     "UID": s["uid"],
                     "Nama": s["nama"],
                     "Total DB": s["total_db"],
+                    "Faktor DB (Min 100)": f"{s['faktor_db']*100:.0f}%",
                     "NDP": s["total_ndp"],
                     "Rasio": f"{s['rasio_ndp']:.2f}%",
-                    "Tier": f"{s['tier_pct']}%" if s["tier_pct"] > 0 else "",
-                    "Rate Video": s["rate_vid"] if s["rate_vid"] > 0 else "",
-                    "Rate Dasar": s["rate_dasar"],
-                    "Rate Aktif": s["rate_aktif"] if s["rate_aktif"] > 0 else "",
+                    "Video Upload (Wajib)": f"{s['st_vid_app']} (OK)" if s["has_wajib_video"] else "0 (Potong)",
                     "Omzet": s["total_omzet"],
-                    "Video": s["video_approved"],
                     "Gaji Dasar": s["gaji_dasar"],
+                    "Komisi NDP": s["komisi_ndp"],
                     "Komisi Omzet": s["komisi_omzet"],
-                    "Bonus Aktif": s["bonus_aktif"],
-                    "Bonus Video": s["bonus_video"],
-                    "Bonus Tier": s["bonus_tier"],
+                    "Bonus NDP (>=5)": s["bonus_ndp"],
+                    "Potongan DB (<100)": -s["potongan_db"],
+                    "Potongan Tanpa Video": -s["potongan_video"],
                     "Total Gaji": s["total_gaji"],
                     "Kinerja": f"{s['kinerja']:.1f}%",
                 })
 
             st.dataframe(csv_rows, use_container_width=True, hide_index=True)
-            st.caption("Aturan aktif: Karyawan dengan **0 NDP** otomatis mendapatkan **Total Gaji = Rp 0**.")
+            st.caption(
+                f"Aturan aktif: **0 NDP = Rp 0** | **Min {int(sal_cfg['min_db'])} DB** untuk gaji penuh | "
+                f"**Wajib Upload Video Standalone** (tanpa video dipotong **{int(sal_cfg['potongan_tanpa_video_pct'])}%**) | "
+                f"**Bonus NDP hanya cair jika >= 5 NDP** (tanpa bonus video & tanpa bonus tier)."
+            )
 
-            # Generate file CSV (UTF-8 BOM agar rapi dibuka di Excel/WPS/Sheets)
             buf = io.StringIO()
             if csv_rows:
                 writer = csv.DictWriter(buf, fieldnames=list(csv_rows[0].keys()))
                 writer.writeheader()
                 writer.writerows(csv_rows)
             csv_bytes = buf.getvalue().encode("utf-8-sig")
-            file_tag = today_prefix if is_daily else "semua_waktu"
+            file_tag = wed_cycle_start if period_mode == "Siklus Rabu (Mingguan)" else (today_prefix if period_mode == "Hari Ini" else "semua_waktu")
 
             dl_col1, dl_col2 = st.columns(2)
             with dl_col1:
@@ -2181,7 +2417,7 @@ elif user["role"] == "admin":
                     st.rerun()
 
             st.divider()
-            st.subheader("Detail Per Karyawan")
+            st.subheader("Detail & Pembagian Gaji Per Karyawan")
             employees = [s["nama"] for s in all_stats]
             selected = st.selectbox("Pilih Karyawan", employees, key="analytic_sel_emp")
             sel_s = next(s for s in all_stats if s["nama"] == selected)
@@ -2189,8 +2425,32 @@ elif user["role"] == "admin":
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("NDP", sel_s["total_ndp"])
             c2.metric("DB Dicek", f"{sel_s['done_db']}/{sel_s['total_db']}")
-            c3.metric("Video", f"{sel_s['video_approved']}/{sel_s['video_reviewed']}")
+            c3.metric("Video Upload", f"{sel_s['st_vid_app']} approved")
             c4.metric("Total Gaji", fmt_rp(sel_s["total_gaji"]))
+
+            with st.container(border=True):
+                st.markdown("**Rincian Pembagian & Potongan Gaji**")
+                b1, b2, b3, b4 = st.columns(4)
+                b1.metric("Gaji Dasar", fmt_rp(sel_s["gaji_dasar"]))
+                b2.metric("Komisi NDP", fmt_rp(sel_s["komisi_ndp"]))
+                b3.metric("Komisi Omzet", fmt_rp(sel_s["komisi_omzet"]))
+                b4.metric("Bonus >=5 NDP", fmt_rp(sel_s["bonus_ndp"]))
+
+                p1, p2, p3 = st.columns(3)
+                p1.metric("Gaji Kotor", fmt_rp(sel_s["gaji_kotor"]))
+                p2.metric(f"Potongan DB ({sel_s['total_db']}/{int(sal_cfg['min_db'])})", f"-{fmt_rp(sel_s['potongan_db'])}")
+                p3.metric("Potongan Tanpa Video", f"-{fmt_rp(sel_s['potongan_video'])}")
+
+                if sel_s["total_db"] < int(sal_cfg["min_db"]):
+                    st.warning(
+                        f"DB baru mencapai **{sel_s['total_db']} / {int(sal_cfg['min_db'])}** — "
+                        f"gaji disesuaikan menjadi **{sel_s['faktor_db']*100:.0f}%**."
+                    )
+                if not sel_s["has_wajib_video"]:
+                    st.error(
+                        f"Belum ada **Upload Video Standalone (menu Upload)** yang di-approve — "
+                        f"gaji dipotong **{int(sal_cfg['potongan_tanpa_video_pct'])}%**."
+                    )
 
             st.progress(min(sel_s["kinerja"] / 100, 1.0))
             vid_lbl = f"{sel_s['video_pct']:.1f}%" if sel_s["video_pct"] is not None else "N/A"
@@ -2747,7 +3007,7 @@ else:
 
     elif page == "Upload":
         st.header("Upload Video")
-        st.caption("Gunakan menu ini untuk upload video di luar pengajuan NDP.")
+        st.caption("Wajib upload minimal 1 video di menu ini (di luar pengajuan NDP) agar gaji tidak terkena potongan.")
 
         vid = st.file_uploader("Pilih Video (MP4/MOV)", type=["mp4", "mov"], key="up_vid")
         size_mb = 0
@@ -2815,3 +3075,4 @@ else:
                     if t.get("content"):
                         st.code(t["content"], language="text")
                         st.caption("*Klik ikon copy di pojok kanan atas kotak untuk menyalin teks.*")
+
