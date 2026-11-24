@@ -1918,105 +1918,295 @@ elif user["role"] == "admin":
                 st.divider()
 
     elif page == "Analytic":
-        st.header("Analitik Kinerja")
-        employees = [u["name"] for u in worker.data["users"] if u["role"] == "karyawan"]
-        if not employees:
+        import csv
+        import io
+
+        st.header("Analitik & Rekap CSV")
+        emp_users = [u for u in worker.data["users"] if u["role"] == "karyawan"]
+        if not emp_users:
             st.info("Belum ada karyawan.")
         else:
-            selected = st.selectbox("Pilih Karyawan", employees)
             today_prefix = today_wib_str()
 
             def _is_today(ts_str):
                 return str(ts_str or "").startswith(today_prefix)
 
-            ndp_today_all = [
-                r for r in worker.data["reports"]["ndp"]
-                if r["user"] == selected and _is_today(r.get("time"))
-            ]
-            ndp_approved = [r for r in ndp_today_all if r.get("status") == "approved"]
-            total_ndp = sum(r.get("count", 0) for r in ndp_approved)
+            def _parse_omzet_from_caption(cap_str):
+                if not cap_str:
+                    return 0
+                parts = [p.strip() for p in str(cap_str).split(":")]
+                if len(parts) >= 2:
+                    digits = re.sub(r"[^0-9]", "", parts[1])
+                    if digits:
+                        return int(digits)
+                return 0
 
-            my_db = next((d for d in worker.data["databases"] if d["name"] == selected), None)
-            preserved = worker.data["db_stats"].get(selected)
-            pres_counts = (preserved or {}).get("counts", {})
+            def _calc_emp_stats(u_obj, daily_only=True):
+                ename = u_obj["name"]
+                euid = u_obj["uid"]
 
-            active_total = len(my_db["numbers"]) if my_db else 0
-            active_done = sum(1 for n in my_db["numbers"] if n.get("status", "Belum Dicek") != "Belum Dicek") if my_db else 0
-            active_tidak = sum(1 for n in my_db["numbers"] if n.get("status") == "Tidak Terdaftar") if my_db else 0
-            active_dibalas = sum(1 for n in my_db["numbers"] if n.get("status") == "Dibalas") if my_db else 0
+                ndp_all = [
+                    r for r in worker.data["reports"]["ndp"]
+                    if r["user"] == ename and (not daily_only or _is_today(r.get("time")))
+                ]
+                ndp_approved = [r for r in ndp_all if r.get("status") == "approved"]
+                total_ndp = sum(r.get("count", 0) for r in ndp_approved)
+                total_omzet = sum(_parse_omzet_from_caption(r.get("video_caption")) for r in ndp_approved)
 
-            pres_total = preserved.get("total", 0) if preserved else 0
-            pres_done = preserved.get("done", 0) if preserved else 0
-            pres_tidak = pres_counts.get("Tidak Terdaftar", 0)
-            pres_dibalas = preserved.get("dibalas", 0) if preserved else 0
+                my_db = next((d for d in worker.data["databases"] if d["name"] == ename), None)
+                preserved = worker.data["db_stats"].get(ename)
+                pres_counts = (preserved or {}).get("counts", {})
 
-            total_db = active_total + pres_total
-            done_db = active_done + pres_done
-            tidak_db = active_tidak + pres_tidak
-            dibalas_db = active_dibalas + pres_dibalas
+                active_total = len(my_db["numbers"]) if my_db else 0
+                active_done = sum(1 for n in my_db["numbers"] if n.get("status", "Belum Dicek") != "Belum Dicek") if my_db else 0
+                active_tidak = sum(1 for n in my_db["numbers"] if n.get("status") == "Tidak Terdaftar") if my_db else 0
+                active_dibalas = sum(1 for n in my_db["numbers"] if n.get("status") == "Dibalas") if my_db else 0
 
-            # Hanya hitung DB valid yang SUDAH dicek sebagai pembagi rasio balasan
-            valid_checked = max(done_db - tidak_db, 0)
-            checked_pct = (done_db / total_db * 100) if total_db > 0 else 0.0
+                pres_total = preserved.get("total", 0) if preserved else 0
+                pres_done = preserved.get("done", 0) if preserved else 0
+                pres_tidak = pres_counts.get("Tidak Terdaftar", 0)
+                pres_dibalas = preserved.get("dibalas", 0) if preserved else 0
 
-            if total_db == 0:
-                reply_pct = 0.0
-                db_pct = 0.0
-            elif valid_checked == 0:
-                reply_pct = 0.0
-                db_pct = checked_pct * 0.5
-            else:
-                reply_pct = (dibalas_db / valid_checked) * 100
-                db_pct = (checked_pct * 0.6) + (reply_pct * 0.4)
+                total_db = active_total + pres_total
+                done_db = active_done + pres_done
+                tidak_db = active_tidak + pres_tidak
+                dibalas_db = active_dibalas + pres_dibalas
 
-            # Hitung Video hari ini (termasuk rejected di penyebut agar penolakan mengurangi akurasi)
-            vid_today_all = [
-                v for v in worker.data["reports"]["video"]
-                if v["user"] == selected and _is_today(v.get("time"))
-            ]
-            ndp_vid_approved = sum(1 for n in ndp_today_all if n.get("status") == "approved" and n.get("video_key"))
-            ndp_vid_rejected = sum(1 for n in ndp_today_all if n.get("status") == "rejected" and n.get("video_key"))
-            stand_vid_approved = sum(1 for v in vid_today_all if v.get("status") == "approved")
-            stand_vid_rejected = sum(1 for v in vid_today_all if v.get("status") == "rejected")
+                vid_all = [
+                    v for v in worker.data["reports"]["video"]
+                    if v["user"] == ename and (not daily_only or _is_today(v.get("time")))
+                ]
+                ndp_vid_app = sum(1 for n in ndp_all if n.get("status") == "approved" and n.get("video_key"))
+                ndp_vid_rej = sum(1 for n in ndp_all if n.get("status") == "rejected" and n.get("video_key"))
+                st_vid_app = sum(1 for v in vid_all if v.get("status") == "approved")
+                st_vid_rej = sum(1 for v in vid_all if v.get("status") == "rejected")
 
-            video_approved = ndp_vid_approved + stand_vid_approved
-            video_reviewed = video_approved + ndp_vid_rejected + stand_vid_rejected
-            video_pct = (video_approved / video_reviewed * 100) if video_reviewed > 0 else None
+                video_approved = ndp_vid_app + st_vid_app
+                video_reviewed = video_approved + ndp_vid_rej + st_vid_rej
 
-            # Konversi NDP terhadap nomor yang dibalas / valid dicek
-            ndp_base = max(dibalas_db, valid_checked)
-            ndp_pct = min((total_ndp / ndp_base) * 100, 100.0) if ndp_base > 0 else 0.0
+                # Rasio NDP terhadap Total DB (%)
+                rasio_ndp = (total_ndp / total_db * 100) if total_db > 0 else 0.0
 
-            # Gabungkan hanya komponen aktif secara proporsional
-            weights = []
-            if total_db > 0:
-                weights.append((db_pct, 0.50))
-                weights.append((ndp_pct, 0.30))
-            elif total_ndp > 0:
-                weights.append((100.0, 0.30))
-            if video_pct is not None:
-                weights.append((video_pct, 0.20))
+                # Aturan baru: jika karyawan tidak mendapatkan NDP (total_ndp == 0), maka gaji = 0
+                if total_ndp <= 0:
+                    tier_pct = 0
+                    rate_dasar = 0
+                    rate_aktif = 0
+                    rate_vid = 0
+                    gaji_dasar = 0
+                    komisi_omzet = 0
+                    bonus_aktif = 0
+                    bonus_video = 0
+                    bonus_tier = 0
+                    total_gaji = 0
+                else:
+                    if rasio_ndp >= 3.15 and total_ndp >= 31:
+                        tier_pct = 15
+                        rate_dasar = 700
+                        rate_aktif = 11000
+                        rate_vid = 1000
+                        bonus_tier = max(total_ndp - 1, 1) * 10000
+                    elif rasio_ndp >= 3.00:
+                        tier_pct = 10
+                        rate_dasar = 650 if total_ndp >= 17 else 600
+                        rate_aktif = 10000
+                        rate_vid = 1000
+                        bonus_tier = max(total_ndp - 1, 1) * 10000
+                    elif rasio_ndp >= 2.00:
+                        tier_pct = 6
+                        rate_dasar = 350
+                        rate_aktif = 8000
+                        rate_vid = 1000
+                        bonus_tier = 10000 if total_ndp <= 2 else (total_ndp - 1) * 10000
+                    elif rasio_ndp >= 1.00:
+                        tier_pct = 5
+                        rate_dasar = 300
+                        rate_aktif = 6000
+                        rate_vid = 1000
+                        bonus_tier = 10000 if total_ndp <= 2 else (total_ndp - 1) * 10000
+                    else:
+                        tier_pct = 0
+                        rate_dasar = 200
+                        rate_aktif = 0
+                        rate_vid = 0
+                        bonus_tier = 0
 
-            if weights:
-                total_w = sum(w for _, w in weights)
-                kinerja = sum(val * w for val, w in weights) / total_w
-            else:
-                kinerja = 0.0
+                    gaji_dasar = total_db * rate_dasar
+                    komisi_omzet = round(total_omzet * (tier_pct / 100.0))
+                    bonus_aktif = total_ndp * rate_aktif
+                    bonus_video = video_approved * rate_vid
+                    total_gaji = gaji_dasar + komisi_omzet + bonus_aktif + bonus_video + bonus_tier
+
+                # Skor Kinerja (%)
+                valid_checked = max(done_db - tidak_db, 0)
+                checked_pct = (done_db / total_db * 100) if total_db > 0 else 0.0
+                if total_db == 0:
+                    reply_pct = 0.0
+                    db_pct = 0.0
+                elif valid_checked == 0:
+                    reply_pct = 0.0
+                    db_pct = checked_pct * 0.5
+                else:
+                    reply_pct = (dibalas_db / valid_checked) * 100
+                    db_pct = (checked_pct * 0.6) + (reply_pct * 0.4)
+
+                video_pct = (video_approved / video_reviewed * 100) if video_reviewed > 0 else None
+                ndp_base = max(dibalas_db, valid_checked)
+                ndp_pct = min((total_ndp / ndp_base) * 100, 100.0) if ndp_base > 0 else 0.0
+
+                weights = []
+                if total_db > 0:
+                    weights.append((db_pct, 0.50))
+                    weights.append((ndp_pct, 0.30))
+                elif total_ndp > 0:
+                    weights.append((100.0, 0.30))
+                if video_pct is not None:
+                    weights.append((video_pct, 0.20))
+
+                if weights:
+                    kinerja = sum(val * w for val, w in weights) / sum(w for _, w in weights)
+                else:
+                    kinerja = 0.0
+
+                return {
+                    "uid": euid,
+                    "nama": ename,
+                    "total_db": total_db,
+                    "done_db": done_db,
+                    "dibalas_db": dibalas_db,
+                    "total_ndp": total_ndp,
+                    "rasio_ndp": rasio_ndp,
+                    "tier_pct": tier_pct,
+                    "rate_vid": rate_vid,
+                    "rate_dasar": rate_dasar,
+                    "rate_aktif": rate_aktif,
+                    "total_omzet": total_omzet,
+                    "video_approved": video_approved,
+                    "video_reviewed": video_reviewed,
+                    "gaji_dasar": gaji_dasar,
+                    "komisi_omzet": komisi_omzet,
+                    "bonus_aktif": bonus_aktif,
+                    "bonus_video": bonus_video,
+                    "bonus_tier": bonus_tier,
+                    "total_gaji": total_gaji,
+                    "kinerja": kinerja,
+                    "checked_pct": checked_pct,
+                    "reply_pct": reply_pct,
+                    "ndp_pct": ndp_pct,
+                    "video_pct": video_pct,
+                    "my_db": my_db,
+                    "pres_total": pres_total,
+                    "pres_done": pres_done,
+                    "pres_dibalas": pres_dibalas,
+                    "pres_counts": pres_counts,
+                }
+
+            period_mode = st.radio(
+                "Periode Data Rekap",
+                ["Hari Ini", "Semua Waktu"],
+                horizontal=True,
+                key="analytic_period_mode"
+            )
+            is_daily = (period_mode == "Hari Ini")
+
+            all_stats = [_calc_emp_stats(u, daily_only=is_daily) for u in emp_users]
+            all_stats.sort(key=lambda x: (x["total_gaji"], x["total_ndp"], x["total_db"]), reverse=True)
+
+            # Ringkasan Global
+            g1, g2, g3, g4 = st.columns(4)
+            g1.metric("Karyawan", len(all_stats))
+            g2.metric("Total NDP", sum(s["total_ndp"] for s in all_stats))
+            g3.metric("Total DB", sum(s["total_db"] for s in all_stats))
+            g4.metric("Total Gaji", fmt_rp(sum(s["total_gaji"] for s in all_stats)))
+
+            # Tabel CSV Lengkap Semua Karyawan
+            csv_rows = []
+            for s in all_stats:
+                csv_rows.append({
+                    "UID": s["uid"],
+                    "Nama": s["nama"],
+                    "Total DB": s["total_db"],
+                    "NDP": s["total_ndp"],
+                    "Rasio": f"{s['rasio_ndp']:.2f}%",
+                    "Tier": f"{s['tier_pct']}%" if s["tier_pct"] > 0 else "",
+                    "Rate Video": s["rate_vid"] if s["rate_vid"] > 0 else "",
+                    "Rate Dasar": s["rate_dasar"],
+                    "Rate Aktif": s["rate_aktif"] if s["rate_aktif"] > 0 else "",
+                    "Omzet": s["total_omzet"],
+                    "Video": s["video_approved"],
+                    "Gaji Dasar": s["gaji_dasar"],
+                    "Komisi Omzet": s["komisi_omzet"],
+                    "Bonus Aktif": s["bonus_aktif"],
+                    "Bonus Video": s["bonus_video"],
+                    "Bonus Tier": s["bonus_tier"],
+                    "Total Gaji": s["total_gaji"],
+                    "Kinerja": f"{s['kinerja']:.1f}%",
+                })
+
+            st.dataframe(csv_rows, use_container_width=True, hide_index=True)
+            st.caption("Aturan aktif: Karyawan dengan **0 NDP** otomatis mendapatkan **Total Gaji = Rp 0**.")
+
+            # Generate file CSV (UTF-8 BOM agar rapi dibuka di Excel/WPS/Sheets)
+            buf = io.StringIO()
+            if csv_rows:
+                writer = csv.DictWriter(buf, fieldnames=list(csv_rows[0].keys()))
+                writer.writeheader()
+                writer.writerows(csv_rows)
+            csv_bytes = buf.getvalue().encode("utf-8-sig")
+            file_tag = today_prefix if is_daily else "semua_waktu"
+
+            dl_col1, dl_col2 = st.columns(2)
+            with dl_col1:
+                st.download_button(
+                    label="Download CSV",
+                    data=csv_bytes,
+                    file_name=f"rekap_analytic_{file_tag}.csv",
+                    mime="text/csv",
+                    type="primary",
+                    use_container_width=True,
+                    icon=":material/download:",
+                    key="btn_dl_analytic_csv"
+                )
+            with dl_col2:
+                if st.button(
+                    "Sync Gaji ke Payroll",
+                    use_container_width=True,
+                    icon=":material/sync:",
+                    key="btn_sync_csv_payroll"
+                ):
+                    for s in all_stats:
+                        worker.data["payroll"][s["nama"]] = s["total_gaji"]
+                    save_key_sync("payroll.json")
+                    st.success("Saldo Payroll seluruh karyawan berhasil disinkronkan dengan Total Gaji tabel!")
+                    st.rerun()
+
+            st.divider()
+            st.subheader("Detail Per Karyawan")
+            employees = [s["nama"] for s in all_stats]
+            selected = st.selectbox("Pilih Karyawan", employees, key="analytic_sel_emp")
+            sel_s = next(s for s in all_stats if s["nama"] == selected)
 
             c1, c2, c3, c4 = st.columns(4)
-            c1.metric("NDP (Hari Ini)", total_ndp)
-            c2.metric("DB Dicek", f"{done_db}/{total_db}")
-            c3.metric("Video", f"{video_approved}/{video_reviewed}")
-            c4.metric("Kinerja", f"{kinerja:.1f}%")
+            c1.metric("NDP", sel_s["total_ndp"])
+            c2.metric("DB Dicek", f"{sel_s['done_db']}/{sel_s['total_db']}")
+            c3.metric("Video", f"{sel_s['video_approved']}/{sel_s['video_reviewed']}")
+            c4.metric("Total Gaji", fmt_rp(sel_s["total_gaji"]))
 
-            st.progress(min(kinerja / 100, 1.0))
-            vid_lbl = f"{video_pct:.1f}%" if video_pct is not None else "N/A"
+            st.progress(min(sel_s["kinerja"] / 100, 1.0))
+            vid_lbl = f"{sel_s['video_pct']:.1f}%" if sel_s["video_pct"] is not None else "N/A"
             st.caption(
-                f"Progres Cek DB: **{checked_pct:.1f}%** | "
-                f"Rasio Dibalas (dari DB valid dicek): **{reply_pct:.1f}%** | "
-                f"Konversi NDP: **{ndp_pct:.1f}%** | "
+                f"Kinerja: **{sel_s['kinerja']:.1f}%** | "
+                f"Progres Cek DB: **{sel_s['checked_pct']:.1f}%** | "
+                f"Rasio Dibalas: **{sel_s['reply_pct']:.1f}%** | "
+                f"Konversi NDP: **{sel_s['ndp_pct']:.1f}%** | "
                 f"Akurasi Video: **{vid_lbl}**"
             )
+
+            my_db = sel_s["my_db"]
+            pres_total = sel_s["pres_total"]
+            pres_done = sel_s["pres_done"]
+            pres_dibalas = sel_s["pres_dibalas"]
+            pres_counts = sel_s["pres_counts"]
 
             if pres_total > 0:
                 st.info(
@@ -2030,9 +2220,7 @@ elif user["role"] == "admin":
                     st.rerun()
 
             if (my_db and my_db.get("numbers")) or pres_total > 0:
-                st.divider()
                 st.subheader("Rincian Database")
-
                 status_order = list(DB_STATUSES)
 
                 cols = st.columns(len(status_order))
@@ -2627,4 +2815,3 @@ else:
                     if t.get("content"):
                         st.code(t["content"], language="text")
                         st.caption("*Klik ikon copy di pojok kanan atas kotak untuk menyalin teks.*")
-
