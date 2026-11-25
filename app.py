@@ -832,7 +832,7 @@ worker.cleanup_expired_popups()
 
 DB_STATUSES = ["Belum Dicek", "Tidak Terdaftar", "Terdaftar", "Dibaca", "Dibalas"]
 WD_FEE = 3000.0
-WD_MIN = 20000.0
+WD_MIN = 30000.0
 BANK_LIST = ["BCA", "BRI", "BNI", "Mandiri", "BSI", "CIMB Niaga", "SeaBank", "Bank Jago", "Permata", "Danamon", "OCBC", "BTN"]
 EWALLET_LIST = ["DANA", "OVO", "GoPay", "ShopeePay", "LinkAja"]
 
@@ -1365,7 +1365,7 @@ if page == "Akun":
             value=None,
             step=5000.0,
             format="%.2f",
-            placeholder="Minimal 20,000.00",
+            placeholder="Minimal 30,000.00",
             label_visibility="collapsed",
             key="wd_amount_in"
         )
