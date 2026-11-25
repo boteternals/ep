@@ -26,6 +26,7 @@ def now_wib():
 def today_wib_str():
     return now_wib().date().isoformat()
 
+from concurrent.futures import ThreadPoolExecutor
 from botocore.exceptions import ClientError
 from botocore.client import Config
 
@@ -406,10 +407,11 @@ def svg_html(name, text, size=16, color="#38BDF8"):
     return f"{svg(name, size, color)} <span style='vertical-align:middle;'>{text}</span>"
 
 
-@st.cache_resource
+@st.cache_resource(show_spinner="Menghubungkan ke server...")
 def get_worker():
     class S3Worker:
         def __init__(self):
+            self.init_error = None
             raw_bucket = st.secrets.get("S3_BUCKET_NAME", "SatyaDev13/ElangP")
             if "/" in raw_bucket:
                 namespace, bucket_name = raw_bucket.split("/", 1)
@@ -429,11 +431,20 @@ def get_worker():
                 s3_cfg = Config(
                     s3={"addressing_style": "path"},
                     signature_version="s3v4",
+                    connect_timeout=5,
+                    read_timeout=10,
+                    retries={"max_attempts": 1},
                     request_checksum_calculation="when_required",
                     response_checksum_validation="when_required",
                 )
             except TypeError:
-                s3_cfg = Config(s3={"addressing_style": "path"}, signature_version="s3v4")
+                s3_cfg = Config(
+                    s3={"addressing_style": "path"},
+                    signature_version="s3v4",
+                    connect_timeout=5,
+                    read_timeout=10,
+                    retries={"max_attempts": 1},
+                )
 
             self.s3 = boto3.client(
                 "s3", endpoint_url=endpoint_url,
@@ -445,28 +456,55 @@ def get_worker():
             self.q = queue.Queue()
             self.lock = threading.Lock()
 
-            texts_raw = self._load("texts.json", [])
+            load_specs = {
+                "users": ("users.json", []),
+                "databases": ("databases.json", []),
+                "texts": ("texts.json", []),
+                "payroll": ("payroll.json", {}),
+                "reports": ("reports.json", {"ndp": [], "wd": [], "video": []}),
+                "sessions": ("sessions.json", {}),
+                "db_stats": ("db_stats.json", {}),
+                "popups": ("popups.json", []),
+                "meta": ("meta.json", {"last_reset_date": today_wib_str()}),
+            }
+            loaded = {}
+            with ThreadPoolExecutor(max_workers=len(load_specs)) as pool:
+                futures = {
+                    name: pool.submit(self._load, fname, default)
+                    for name, (fname, default) in load_specs.items()
+                }
+                for name, fut in futures.items():
+                    try:
+                        loaded[name] = fut.result(timeout=15)
+                    except Exception as e:
+                        self.init_error = f"Timeout/gagal memuat {load_specs[name][0]}: {e}"
+                        loaded[name] = copy.deepcopy(load_specs[name][1])
+
+            texts_raw = loaded["texts"]
             if isinstance(texts_raw, dict) and "content" in texts_raw:
                 old_content = texts_raw.get("content", "")
                 if old_content:
                     texts_raw = [{"id": uuid.uuid4().hex, "title": "Teks Kerja Utama", "content": old_content, "image_key": None}]
                 else:
                     texts_raw = []
-                self._save("texts.json", texts_raw)
+                try:
+                    self._save("texts.json", texts_raw)
+                except Exception as e:
+                    self.init_error = f"Gagal migrasi texts.json: {e}"
 
-            meta_raw = self._load("meta.json", {"last_reset_date": today_wib_str()})
+            meta_raw = loaded["meta"]
             if not isinstance(meta_raw, dict):
                 meta_raw = {"last_reset_date": today_wib_str()}
 
             self.data = {
-                "users": self._load("users.json", []),
-                "databases": self._load("databases.json", []),
+                "users": loaded["users"],
+                "databases": loaded["databases"],
                 "texts": texts_raw,
-                "payroll": self._load("payroll.json", {}),
-                "reports": self._load("reports.json", {"ndp": [], "wd": [], "video": []}),
-                "sessions": self._load("sessions.json", {}),
-                "db_stats": self._load("db_stats.json", {}),
-                "popups": self._load("popups.json", []),
+                "payroll": loaded["payroll"],
+                "reports": loaded["reports"],
+                "sessions": loaded["sessions"],
+                "db_stats": loaded["db_stats"],
+                "popups": loaded["popups"],
                 "meta": meta_raw,
             }
 
@@ -524,11 +562,19 @@ def get_worker():
             try:
                 obj = self.s3.get_object(Bucket=self.bucket, Key=key)
                 return json.loads(obj["Body"].read().decode("utf-8"))
-            except ClientError:
-                self._save(key, default)
-                return default
-            except Exception:
-                return default
+            except ClientError as e:
+                err_code = e.response.get("Error", {}).get("Code", "")
+                if err_code in ("NoSuchKey", "404", "NotFound"):
+                    try:
+                        self._save(key, default)
+                    except Exception as save_err:
+                        self.init_error = f"Gagal inisialisasi {key}: {save_err}"
+                else:
+                    self.init_error = f"S3 Error ({key}): {err_code} - {e}"
+                return copy.deepcopy(default)
+            except Exception as e:
+                self.init_error = f"Koneksi S3 Error ({key}): {type(e).__name__}: {e}"
+                return copy.deepcopy(default)
 
         def _save(self, key, data):
             self.s3.put_object(
@@ -775,6 +821,11 @@ def get_worker():
     return S3Worker()
 
 worker = get_worker()
+if getattr(worker, "init_error", None):
+    st.error(f"Kendala koneksi storage S3: {worker.init_error}")
+    if st.button("Coba Hubungkan Ulang S3", type="primary", icon=":material/refresh:"):
+        st.cache_resource.clear()
+        st.rerun()
 worker.ensure_daily_reset()
 worker.cleanup_expired_popups()
 
