@@ -454,7 +454,7 @@ def get_worker():
             )
             self.bucket = bucket_name
             self.q = queue.Queue()
-            self.lock = threading.Lock()
+            self.lock = threading.RLock()
 
             load_specs = {
                 "users": ("users.json", []),
